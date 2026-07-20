@@ -1,0 +1,431 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+///////////////////////////////////////////////////////
+// AUTH CONTEXT (IDENTIDADE E AUTORIZAÇÃO)
+///////////////////////////////////////////////////////
+
+model User {
+  id            String     @id @default(uuid())
+  email         String     @unique
+  passwordHash  String
+  isActive      Boolean    @default(true)
+  photoUrl      String?
+  photoPublicId String?
+  phoneVerifiedAt   DateTime?
+  emailVerifiedAt   DateTime?
+  isTemporaryPassword Boolean @default(false)
+  temporaryPasswordExpiresAt DateTime?
+  passwordChangedAt        DateTime?
+  roles         UserRole[]
+  member        Member?
+  posters       Post[]
+  financialRecords FinancialRecord[]
+  refreshTokens RefreshToken[]
+  notifications Notification[]
+
+  whatsappInstances WhatsAppInstance[]
+
+  createdEvents  Event[] @relation("EventCreatedBy")
+  deletedEvents  Event[] @relation("EventDeletedBy")
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  message   String?
+  payload   String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+model Role {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  level       Int
+  description String?
+  users       UserRole[]
+}
+
+model UserRole {
+  userId String
+  roleId String   // <-- aqui muda para String
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  assignedAt DateTime @default(now())
+
+  @@id([userId, roleId])
+}
+
+///////////////////////////////////////////////////////
+// DOMAIN CONTEXT – MEMBROS
+///////////////////////////////////////////////////////
+
+model Member {
+  id                 String   @id @default(uuid())
+
+  fullName           String
+  normalizedFullName String
+
+  nickname           String?
+  normalizedNickname String?
+
+  birthDate          DateTime
+
+  phone              String?
+
+  postcode           String?
+  normalizedPostcode String?
+
+  address            String?
+
+  baptismDate        DateTime?
+  churchJoinDate     DateTime
+  status             MemberStatus @default(ACTIVE)
+
+  preachedEvents Event[] @relation("EventPreacher")
+
+  userId             String? @unique
+  user               User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  events             EventMember[]
+  ministries         MemberMinistry[]
+  financialRecords   FinancialRecord[]
+  assignments EventAssignment[]
+  ledMinistries Ministry[] @relation("MinistryLeader")
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  deletedAt          DateTime?
+
+  @@unique([normalizedFullName, birthDate])
+  @@index([phone])
+  @@index([normalizedPostcode])
+  @@index([status])
+}
+
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+  VISITOR
+  TRANSFERRED
+}
+
+///////////////////////////////////////////////////////
+// MINISTÉRIOS
+///////////////////////////////////////////////////////
+
+model Ministry {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  description  String?
+  leaderId     String?
+  leader       Member?  @relation("MinistryLeader", fields: [leaderId], references: [id])
+  members      MemberMinistry[]
+  assignments  EventAssignment[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([leaderId])
+}
+
+model MemberMinistry {
+  memberId   String
+  ministryId String
+
+  member     Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  ministry   Ministry @relation(fields: [ministryId], references: [id], onDelete: Cascade)
+
+  joinedAt   DateTime @default(now())
+
+  @@id([memberId, ministryId])
+}
+
+model EventMember {
+  eventId   String
+  memberId  String
+  joinedAt  DateTime @default(now())
+
+  event     Event   @relation(fields: [eventId], references: [id])
+  member    Member  @relation(fields: [memberId], references: [id])
+
+  @@id([eventId, memberId]) // garante que um membro só pode estar uma vez no evento
+}
+
+model Category {
+  id    String @id @default(uuid())
+  name  String @unique
+  type  TransactionDirection // optional, para diferenciar INCOME / OUTCOME
+  records FinancialRecord[]
+  createdAt          DateTime @default(now())
+
+}
+
+///////////////////////////////////////////////////////
+// CULTOS E EVENTOS
+///////////////////////////////////////////////////////
+
+model EventAttendance {
+  id           String   @id @default(uuid())
+
+  eventId    String   @unique
+  event      Event  @relation(fields: [eventId], references: [id])
+
+  membersCount     Int
+  visitorsCount    Int
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model EventAssignment {
+  id         String @id @default(uuid())
+  eventId    String
+  memberId   String
+  ministryId String
+
+  description String? // ex: "guitarra, vocal"
+
+  assignedAt DateTime @default(now())
+
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  ministry  Ministry @relation(fields: [ministryId], references: [id])
+
+  // evita duplicidade do mesmo membro no mesmo ministério para o mesmo evento
+  @@unique([eventId, memberId, ministryId])
+
+  // índices para acelerar queries
+  @@index([eventId])
+  @@index([memberId])
+  @@index([memberId, eventId])
+}
+
+enum AttendanceMode {
+  INDIVIDUAL
+  SUMMARY
+}
+
+model Event {
+  id             String        @id @default(uuid())
+
+  title          String?
+  type           EventType
+
+  startsAt       DateTime
+  endsAt         DateTime?
+
+  theme          String?
+  notes          String?
+
+  needsScale     Boolean @default(false)
+
+  preacherId String?
+  preacher   Member? @relation("EventPreacher", fields: [preacherId], references: [id])
+  attendanceMode AttendanceMode
+
+  members        EventMember[]
+  assignments    EventAssignment[]
+  attendance     EventAttendance?
+
+  financialRecords FinancialRecord[]
+
+  createdById    String?
+  createdBy      User? @relation("EventCreatedBy", fields: [createdById], references: [id])
+
+  deletedAt      DateTime?
+  deletedById    String?
+  deletedBy      User? @relation("EventDeletedBy", fields: [deletedById], references: [id])
+  deleteReason   String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([startsAt])
+  @@index([type])
+}
+
+enum EventType {
+  HOUSE_SERVICE
+  SUNDAY_SERVICE
+  PRAYER_MEETING
+  BIBLE_STUDY
+  YOUTH_NIGHT
+  SPECIAL_EVENT
+}
+
+///////////////////////////////////////////////////////
+// FINANCEIRO
+///////////////////////////////////////////////////////
+
+enum TransactionStatus {
+  ACTIVE
+  CANCELLED
+  REVERSED
+}
+
+model FinancialRecord {
+  id              String   @id @default(uuid())
+
+  // 🔒 Dados financeiros (imutáveis)
+  amount          Decimal
+  method          PaymentMethod
+  date            DateTime @default(now())
+
+  memberId        String?
+  member          Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
+
+  eventId         String?
+  event           Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  recordedById    String
+  recordedBy      User     @relation(fields: [recordedById], references: [id])
+
+  // 🧠 Status de negócio (ESSENCIAL)
+  status          TransactionStatus @default(ACTIVE)
+
+  // 🔁 Reversão (auto-relacionamento)
+  reversalOfId    String?
+  reversalOf      FinancialRecord? @relation("Reversal", fields: [reversalOfId], references: [id])
+  reversedBy      FinancialRecord[] @relation("Reversal")
+
+  // 🧾 Metadados (editáveis)
+  description     String?
+  categoryId      String
+  category        Category @relation(fields: [categoryId], references: [id])
+
+  // 🟡 Cancelamento (não é delete!)
+  cancelledAt     DateTime?
+  cancelledById   String?
+  cancelReason    String?
+
+  // 🕓 Auditoria
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([date])
+  @@index([status])
+  @@index([reversalOfId])
+}
+
+enum TransactionDirection {
+  INCOME
+  EXPENSE
+}
+
+enum PaymentMethod {
+  CASH
+  PIX
+  CREDIT_CARD
+  BANK_TRANSFER
+}
+
+///////////////////////////////////////////////////////
+// COMUNICAÇÃO
+///////////////////////////////////////////////////////
+
+enum PostVisibility {
+  PUBLIC
+  INTERNAL
+}
+
+model Post {
+  id          String          @id @default(uuid())
+  title       String
+  content     String
+  imageUrl    String?
+
+  category    PostCategory
+  visibility  PostVisibility @default(PUBLIC)
+
+  publishedAt DateTime?
+
+  authorId    String
+  author      User            @relation(fields: [authorId], references: [id])
+
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([visibility])
+  @@index([category])
+  @@index([publishedAt])
+}
+
+enum PostCategory {
+  SERMON
+  ANNOUNCEMENT
+  EVENT_NEWS
+  DEVOTIONAL
+}
+
+model SiteContentSettings {
+  id                String   @id @default("main")
+  churchName        String   @default("VOC Church")
+  heroTitle         String   @default("VOC Church")
+  heroSubtitle      String   @default("Uma comunidade de fe, amor e transformacao.")
+  heroDescription   String   @default("Acompanhe mensagens, fotos, videos e a vida da igreja em um so lugar.")
+  aboutTitle        String   @default("Sobre Nos")
+  aboutDescription  String   @default("Somos uma igreja comprometida com o evangelho, com o cuidado de pessoas e com o impacto positivo na comunidade.")
+  addressTitle      String   @default("Localizacao")
+  addressLine1      String   @default("Rua da Esperanca, 123")
+  addressLine2      String   @default("Centro - Cidade Exemplo")
+  contactPhone      String?
+  contactEmail      String?
+  footerText        String   @default("Todos os direitos reservados")
+  primaryCtaLabel   String   @default("Visitar plataforma")
+  primaryCtaUrl     String   @default("/auth/login")
+  secondaryCtaLabel String?
+  secondaryCtaUrl   String?
+  instagramUrl      String?
+  facebookUrl       String?
+  youtubeUrl        String?
+  bannersJson       String   @default("[]")
+  photosJson        String   @default("[]")
+  videosJson        String   @default("[]")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model WhatsAppInstance {
+  id          String   @id @default(uuid())
+  instanceName String  @unique
+  apiKey      String
+  number      String?
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
