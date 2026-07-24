@@ -72,6 +72,7 @@ export class CloseEventWithSummaryUseCase {
         id: existing.id,
         title: input.event.title ?? existing.title,
         type: existing.type,
+        status: existing.status,
         attendanceMode,
         needsScale: input.event.needsScale ?? existing.needsScale,
         startsAt: input.event.startsAt ?? existing.startsAt,

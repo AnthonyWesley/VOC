@@ -11,6 +11,13 @@ export type MarkAsFinishedInput = {
   endsAt: Date;
 };
 
+export type MarkAsCancelledInput = {
+  id: string;
+  cancelledAt: Date;
+  cancelledById: string;
+  cancelReason: string;
+};
+
 export interface IEventRepository {
   findDetailedEvent(id: string): Promise<DetailedEventDTO | null>;
   findById(id: string): Promise<Event | null>;
@@ -59,6 +66,7 @@ export interface IEventRepository {
     financialRecords?: FinancialRecord[],
   ): Promise<void>;
   markAsFinishedIfScheduled(input: MarkAsFinishedInput): Promise<boolean>;
+  markAsCancelledIfScheduled(input: MarkAsCancelledInput): Promise<boolean>;
   softDelete(id: string, deletedById: string, reason?: string): Promise<void>;
   assignAssignment(
     eventId: string,

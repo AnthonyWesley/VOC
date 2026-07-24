@@ -1,5 +1,6 @@
 import {
   AttendanceMode,
+  EventStatus,
   EventType,
   Prisma,
   PrismaClient,
@@ -8,7 +9,7 @@ import {
 import { Event } from "../entities/Event";
 import { EventAttendance } from "../entities/EventAttendance";
 import { FinancialRecord } from "../../../financialRecord/domain/entities/FinancialRecord";
-import { IEventRepository, MarkAsFinishedInput } from "./IEventRepository";
+import { IEventRepository, MarkAsCancelledInput, MarkAsFinishedInput } from "./IEventRepository";
 import { DetailedEventDTO } from "../../usecases/GetEventDetailedUseCase";
 import { ListEventsInput } from "../../usecases/ListEventsUseCase";
 
@@ -212,15 +213,19 @@ export class PrismaEventRepository implements IEventRepository {
       id: data.id,
       title: data.title,
       type: data.type,
+      status: data.status as EventStatus,
       startsAt: data.startsAt,
       preacherId: data.preacherId,
-      attendanceMode: data.attendanceMode,
+      attendanceMode: data.attendanceMode as AttendanceMode,
       needsScale: data.needsScale,
       theme: data.theme,
       notes: data.notes,
       createdById: data.createdById ?? null,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
+      cancelledAt: data.cancelledAt,
+      cancelledById: data.cancelledById,
+      cancelReason: data.cancelReason,
       deletedAt: data.deletedAt,
     });
   }
@@ -395,6 +400,7 @@ export class PrismaEventRepository implements IEventRepository {
         id: item.id,
         title: item.title,
         type: item.type,
+        status: item.status as EventStatus,
         startsAt: item.startsAt,
         endsAt: item.endsAt,
         attendanceMode: item.attendanceMode as AttendanceMode,
@@ -405,6 +411,9 @@ export class PrismaEventRepository implements IEventRepository {
         createdById: item.createdById ?? null,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
+        cancelledAt: item.cancelledAt,
+        cancelledById: item.cancelledById,
+        cancelReason: item.cancelReason,
         deletedAt: item.deletedAt,
       }),
     );
@@ -456,6 +465,14 @@ export class PrismaEventRepository implements IEventRepository {
     const result = await this.prisma.event.updateMany({
       where: { id: input.id, endsAt: null, deletedAt: null },
       data: { endsAt: input.endsAt },
+    });
+    return result.count === 1;
+  }
+
+  async markAsCancelledIfScheduled(input: MarkAsCancelledInput): Promise<boolean> {
+    const result = await this.prisma.event.updateMany({
+      where: { id: input.id, status: "SCHEDULED", deletedAt: null },
+      data: { status: "CANCELLED", cancelledAt: input.cancelledAt, cancelledById: input.cancelledById, cancelReason: input.cancelReason },
     });
     return result.count === 1;
   }

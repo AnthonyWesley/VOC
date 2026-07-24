@@ -2,7 +2,9 @@ import { prisma } from "../../../../package/prisma";
 import { PrismaEventRepository } from "../../domain/repositories/PrismaEventRepository";
 import { PrismaCategoryRepository } from "../../../category/domain/repositories/PrismaCategoryRepository";
 import { AssignMemberToEventUseCase } from "../../usecases/AssignMemberToEventUseCase";
+import { CancelEventUseCase } from "../../usecases/CancelEventUseCase";
 import { CloseEventWithSummaryUseCase } from "../../usecases/CloseEventWithSummaryUseCase";
+import { CorrectEventUseCase } from "../../usecases/CorrectEventUseCase";
 import { DeleteEventUseCase } from "../../usecases/DeleteEventUseCase";
 import { UpdateEventUseCase } from "../../usecases/UpdateEventUseCase";
 import { GetEventDetailedUseCase } from "../../usecases/GetEventDetailedUseCase";
@@ -20,8 +22,10 @@ const close = new CloseEventWithSummaryUseCase(eventRepository, categoryReposito
 const get = new GetEventDetailedUseCase(eventRepository);
 const list = new ListEventsUseCase(eventRepository);
 const monthlyReport = new GetMonthlyEventReportUseCase(eventRepository);
-const softDelete = new DeleteEventUseCase(eventRepository);
+const softDelete = new DeleteEventUseCase(eventRepository, prisma);
 const update = new UpdateEventUseCase(eventRepository);
+const cancelEvent = new CancelEventUseCase(eventRepository);
+const correctEvent = new CorrectEventUseCase(eventRepository, prisma);
 
 const assignMember = new AssignMemberToEventUseCase(eventRepository, prisma, socketServer, createNotificationUseCase);
 const removeMember = new RemoveMemberFromEventUseCase(eventRepository, prisma, socketServer, createNotificationUseCase);
@@ -32,6 +36,8 @@ export const eventController = new EventController(
   list,
   softDelete,
   update,
+  cancelEvent,
+  correctEvent,
   assignMember,
   removeMember,
   monthlyReport,

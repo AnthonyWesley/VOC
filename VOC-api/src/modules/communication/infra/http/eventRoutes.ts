@@ -41,4 +41,12 @@ router.patch("/:eventId/removeMember", auth, requireLevel(LEVEL.MINISTRY_LEADER)
   eventController.removeMember(req, res),
 );
 
+router.post("/:eventId/cancel", auth, requireLevel(LEVEL.TREASURER), (req, res) =>
+  eventController.cancel(req, res),
+);
+
+router.patch("/:eventId/correct", auth, requireLevel(LEVEL.TREASURER), (req, res) =>
+  eventController.correct(req, res),
+);
+
 export { router as eventRoutes };

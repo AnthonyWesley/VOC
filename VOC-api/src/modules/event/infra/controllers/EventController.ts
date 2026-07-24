@@ -1,14 +1,16 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { CloseEventWithSummaryUseCase } from "../../usecases/CloseEventWithSummaryUseCase";
+import { CancelEventUseCase } from "../../usecases/CancelEventUseCase";
+import { CorrectEventUseCase } from "../../usecases/CorrectEventUseCase";
 import { ListEventsUseCase } from "../../usecases/ListEventsUseCase";
 import { DeleteEventUseCase } from "../../usecases/DeleteEventUseCase";
 import { UpdateEventUseCase } from "../../usecases/UpdateEventUseCase";
 import { GetEventDetailedUseCase } from "../../usecases/GetEventDetailedUseCase";
-import { EventType } from "@prisma/client";
 import { AssignMemberToEventUseCase } from "../../usecases/AssignMemberToEventUseCase";
 import { RemoveMemberFromEventUseCase } from "../../usecases/RemoveMemberFromEventUseCase";
 import { GetMonthlyEventReportUseCase } from "../../usecases/GetMonthlyEventReportUseCase";
+import { EventType } from "@prisma/client";
 
 export class EventController {
   constructor(
@@ -17,6 +19,8 @@ export class EventController {
     private readonly ListEventsUseCase: ListEventsUseCase,
     private readonly deleteEventUseCase: DeleteEventUseCase,
     private readonly updateEventUseCase: UpdateEventUseCase,
+    private readonly cancelEventUseCase: CancelEventUseCase,
+    private readonly correctEventUseCase: CorrectEventUseCase,
     private readonly assignMemberToEventUseCase: AssignMemberToEventUseCase,
     private readonly removeMemberFromEventUseCase: RemoveMemberFromEventUseCase,
     private readonly getMonthlyEventReportUseCase: GetMonthlyEventReportUseCase,
@@ -169,6 +173,37 @@ export class EventController {
       assignmentId,
       userId: request.auth!.userId,
       userLevel: request.auth!.userLevel ?? 0,
+    });
+
+    return response.status(200).json(result);
+  }
+
+  async cancel(request: Request, response: Response): Promise<Response> {
+    const eventId = String(request.params.eventId);
+    const { reason } = request.body;
+
+    const result = await this.cancelEventUseCase.execute({
+      eventId,
+      cancelledById: request.auth!.userId,
+      reason,
+    });
+
+    return response.status(200).json(result);
+  }
+
+  async correct(request: Request, response: Response): Promise<Response> {
+    const eventId = String(request.params.eventId);
+    const { reason, theme, notes, preacherId, membersCount, visitorsCount } = request.body;
+
+    const result = await this.correctEventUseCase.execute({
+      eventId,
+      correctedById: request.auth!.userId,
+      reason,
+      theme,
+      notes,
+      preacherId,
+      membersCount,
+      visitorsCount,
     });
 
     return response.status(200).json(result);
