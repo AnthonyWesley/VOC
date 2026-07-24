@@ -734,9 +734,9 @@ export default async function seedTestData() {
   // ================================================================
   console.log("→ Validando integridade dos dados...");
 
-  const nullDirections = await prisma.financialRecord.count({
-    where: { direction: null },
-  });
+  const nullDirections: number = (await prisma.$queryRaw`
+    SELECT COUNT(*)::int AS cnt FROM "FinancialRecord" WHERE "direction" IS NULL
+  `)[0].cnt;
   if (nullDirections > 0) {
     throw new Error(
       `Seed created ${nullDirections} financial record(s) with null direction`,
