@@ -469,7 +469,6 @@ model SiteContentSettings {
 model WhatsAppInstance {
   id          String   @id @default(uuid())
   instanceName String  @unique
-  apiKey      String
   number      String?
   userId      String?
   user        User?    @relation(fields: [userId], references: [id])

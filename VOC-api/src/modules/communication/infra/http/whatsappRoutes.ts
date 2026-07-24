@@ -72,7 +72,6 @@ router.post(
       await prisma.whatsAppInstance.create({
         data: {
           instanceName,
-          apiKey: process.env.EVOLUTION_API_KEY ?? "",
           userId,
           isActive: true,
         },
