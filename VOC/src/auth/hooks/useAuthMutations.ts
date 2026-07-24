@@ -16,6 +16,7 @@ export default function useAuthMutations() {
   const login = useMutation({
     mutationFn: authService.login,
     onSuccess: () => {
+      setTempAuth(null);
       sessionStorage.removeItem("redirected");
       queryClient.invalidateQueries({ queryKey: ["userData"] });
       navigate("/app");
@@ -32,6 +33,12 @@ export default function useAuthMutations() {
 
         toast.info("Alteração de senha obrigatória.");
         navigate("/auth/reset-password");
+        return;
+      }
+
+      if (status === 403 && errorCode === "TEMPORARY_PASSWORD_EXPIRED") {
+        setTempAuth(null);
+        toast.error("Sua senha temporária expirou. Solicite uma nova ao presidente.");
         return;
       }
 
@@ -110,12 +117,13 @@ export default function useAuthMutations() {
     },
 
     onError: (error: any) => {
+      const status = error.response?.status;
+      const code = error.response?.data?.code;
       const message =
         error.response?.data?.message || "Erro ao atualizar senha temporária.";
       toast.error(message);
 
-      // Se o erro for que a senha temporária expirou ou é inválida, limpamos e voltamos
-      if (error.response?.status === 401 || error.response?.status === 410) {
+      if (status === 403 && code === "TEMPORARY_PASSWORD_EXPIRED") {
         setTempAuth(null);
         clearTimer();
         navigate("/auth/login");
@@ -150,10 +158,12 @@ export default function useAuthMutations() {
   const logout = useMutation({
     mutationFn: authService.logout,
     onSuccess: () => {
+      setTempAuth(null);
       queryClient.clear();
       window.location.href = "/auth/login";
     },
     onError: () => {
+      setTempAuth(null);
       queryClient.clear();
       window.location.href = "/auth/login";
     },

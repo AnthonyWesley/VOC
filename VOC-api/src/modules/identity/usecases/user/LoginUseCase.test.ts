@@ -3,6 +3,8 @@ import { LoginUseCase } from "./LoginUseCase";
 import { ForbiddenError } from "../../../../shared/errors/ForbiddenError";
 import { UnauthorizedError } from "../../../../shared/errors/UnauthorizedError";
 
+const MINUTE_MS = 60 * 1000;
+
 function makeMocks() {
   const userRepo = {
     findByEmail: vi.fn(),
@@ -107,14 +109,50 @@ describe("LoginUseCase", () => {
     ).rejects.toThrow(ForbiddenError);
   });
 
-  it("deve lançar TEMPORARY_PASSWORD_REQUIRED se senha for temporária", async () => {
+  it("deve lançar TEMPORARY_PASSWORD_REQUIRED se senha temporária for válida", async () => {
     const { useCase, userRepo, hashProvider } = makeMocks();
-    const user = makeUser({ isTemporaryPassword: true });
+    const future = new Date(Date.now() + 60 * MINUTE_MS);
+    const user = makeUser({ isTemporaryPassword: true, temporaryPasswordExpiresAt: future });
     userRepo.findByEmail.mockResolvedValue(user);
     hashProvider.compare.mockResolvedValue(true);
 
     await expect(
       useCase.execute({ email: "test@test.com", password: "temp-password" }),
-    ).rejects.toThrow(ForbiddenError);
+    ).rejects.toMatchObject({ statusCode: 403, code: "TEMPORARY_PASSWORD_REQUIRED" });
+  });
+
+  it("deve lançar TEMPORARY_PASSWORD_EXPIRED se temporaryPasswordExpiresAt for nulo", async () => {
+    const { useCase, userRepo, hashProvider } = makeMocks();
+    const user = makeUser({ isTemporaryPassword: true, temporaryPasswordExpiresAt: null });
+    userRepo.findByEmail.mockResolvedValue(user);
+    hashProvider.compare.mockResolvedValue(true);
+
+    await expect(
+      useCase.execute({ email: "test@test.com", password: "temp-password" }),
+    ).rejects.toMatchObject({ statusCode: 403, code: "TEMPORARY_PASSWORD_EXPIRED" });
+  });
+
+  it("deve lançar TEMPORARY_PASSWORD_EXPIRED se temporaryPasswordExpiresAt <= now", async () => {
+    const { useCase, userRepo, hashProvider } = makeMocks();
+    const past = new Date(Date.now() - MINUTE_MS);
+    const user = makeUser({ isTemporaryPassword: true, temporaryPasswordExpiresAt: past });
+    userRepo.findByEmail.mockResolvedValue(user);
+    hashProvider.compare.mockResolvedValue(true);
+
+    await expect(
+      useCase.execute({ email: "test@test.com", password: "temp-password" }),
+    ).rejects.toMatchObject({ statusCode: 403, code: "TEMPORARY_PASSWORD_EXPIRED" });
+  });
+
+  it("deve lançar TEMPORARY_PASSWORD_EXPIRED se temporaryPasswordExpiresAt === now", async () => {
+    const { useCase, userRepo, hashProvider } = makeMocks();
+    const now = new Date();
+    const user = makeUser({ isTemporaryPassword: true, temporaryPasswordExpiresAt: now });
+    userRepo.findByEmail.mockResolvedValue(user);
+    hashProvider.compare.mockResolvedValue(true);
+
+    await expect(
+      useCase.execute({ email: "test@test.com", password: "temp-password" }),
+    ).rejects.toMatchObject({ statusCode: 403, code: "TEMPORARY_PASSWORD_EXPIRED" });
   });
 });

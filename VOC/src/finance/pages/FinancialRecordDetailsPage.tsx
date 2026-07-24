@@ -15,14 +15,12 @@ import type { ReceiptPdfData } from "../../pdf/types";
 import { useFinancialRecordMutations } from "../hooks/useFinancialRecordMutations";
 import { LEVEL } from "../../shared/constants/levels";
 import useAuthStatus from "../../auth/hooks/useAuthStatus";
-import useCategories from "../../category/hooks/useCategories";
 
 export default function FinancialRecordDetailsPage() {
   const { recordId } = useParams();
   const navigate = useNavigate();
   const { authLevel } = useAuthStatus();
   const { cancelFinancialRecord, reverseFinancialRecord } = useFinancialRecordMutations();
-  const { queryCategories } = useCategories();
 
   const {
     queryRecord: { data: record, isLoading, error },
@@ -32,7 +30,6 @@ export default function FinancialRecordDetailsPage() {
   const [showCancelModal, setShowCancelModal] = useState(false);
 
   const [reverseReason, setReverseReason] = useState("");
-  const [reverseCategoryId, setReverseCategoryId] = useState("");
   const [showReverseModal, setShowReverseModal] = useState(false);
 
   if (isLoading) {
@@ -43,7 +40,9 @@ export default function FinancialRecordDetailsPage() {
     return <p className="text-red-400">Registro financeiro não encontrado.</p>;
   }
 
-  const isCancelled = record.audit.cancelledAt !== null && record.audit.cancelledAt !== undefined;
+  const status = record.status ?? (record.audit.cancelledAt ? "CANCELLED" : "ACTIVE");
+  const isCancelled = status === "CANCELLED";
+  const isReversed = status === "REVERSED";
   const isOutflow = record.category?.type === "EXPENSE";
 
   const date = new Date(record.date).toLocaleString("pt-BR");
@@ -56,12 +55,6 @@ export default function FinancialRecordDetailsPage() {
   const recordedBy = record.recordedBy.fullName ?? "Usuário desconhecido";
   const recordedByRole = record.recordedBy.roleName ?? undefined;
 
-  // Categorias disponíveis para estorno (tipo oposto ao do registro original)
-  const allCategories = queryCategories.data?.pages.flatMap((p: any) => p.data) ?? [];
-  const reverseCategories = allCategories.filter(
-    (c: any) => c.type !== record.category?.type,
-  );
-
   const handleCancel = () => {
     cancelFinancialRecord.mutate(
       { financialRecordId: record.id, reason: cancelReason },
@@ -73,7 +66,6 @@ export default function FinancialRecordDetailsPage() {
     reverseFinancialRecord.mutate(
       {
         financialRecordId: record.id,
-        categoryId: reverseCategoryId,
         reason: reverseReason,
       },
       { onSuccess: () => setShowReverseModal(false) },
@@ -115,6 +107,16 @@ export default function FinancialRecordDetailsPage() {
               {isCancelled && (
                 <span className="rounded-full bg-red-500/20 px-2.5 py-0.5 text-xs font-semibold text-red-400">
                   Cancelado
+                </span>
+              )}
+              {isReversed && (
+                <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-semibold text-amber-400">
+                  Estornado
+                </span>
+              )}
+              {record.reversalOf && (
+                <span className="rounded-full bg-purple-500/20 px-2.5 py-0.5 text-xs font-semibold text-purple-400">
+                  Estorno
                 </span>
               )}
             </div>
@@ -310,7 +312,7 @@ export default function FinancialRecordDetailsPage() {
               </button>
             </div>
 
-            {!isCancelled && authLevel >= LEVEL.TREASURER && (
+            {!isCancelled && !isReversed && !record.reversalOf && authLevel >= LEVEL.TREASURER && (
               <div className="relative flex flex-wrap gap-2 pt-4">
                 <div className="flex flex-wrap gap-2">
                   <Modal
@@ -404,22 +406,6 @@ export default function FinancialRecordDetailsPage() {
 
           <div className="mt-3 space-y-3">
             <div>
-              <label className="text-xs text-gray-400">Categoria do estorno</label>
-              <select
-                value={reverseCategoryId}
-                onChange={(e) => setReverseCategoryId(e.target.value)}
-                className="select select-sm mt-1 w-full bg-gray-800 text-gray-200"
-              >
-                <option value="">Selecione uma categoria...</option>
-                {reverseCategories.map((c: any) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.type === "EXPENSE" ? "Saída" : "Entrada"})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
               <label className="text-xs text-gray-400">Motivo do estorno</label>
               <textarea
                 value={reverseReason}
@@ -441,7 +427,6 @@ export default function FinancialRecordDetailsPage() {
             <button
               onClick={handleReverse}
               disabled={
-                !reverseCategoryId ||
                 !reverseReason.trim() ||
                 reverseFinancialRecord.isPending
               }

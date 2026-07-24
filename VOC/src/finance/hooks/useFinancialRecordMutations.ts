@@ -68,13 +68,11 @@ export function useFinancialRecordMutations() {
   const reverseFinancialRecord = useMutation({
     mutationFn: ({
       financialRecordId,
-      categoryId,
       reason,
     }: {
       financialRecordId: string;
-      categoryId: string;
       reason: string;
-    }) => financialRecordsService.reverse(financialRecordId, categoryId, reason),
+    }) => financialRecordsService.reverse(financialRecordId, reason),
     onSuccess: () => {
       toast.success("Registro estornado com sucesso!");
       closeModal();

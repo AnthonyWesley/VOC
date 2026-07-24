@@ -89,12 +89,11 @@ export class FinancialRecordController {
 
   async reverse(req: Request, res: Response): Promise<Response> {
     const recordId = String(req.params.recordId);
-    const { categoryId, reason } = req.body;
+    const { reason } = req.body;
 
     const result = await this.reverseUseCase.execute({
       financialRecordId: recordId,
-      cancelledById: req.auth!.userId,
-      categoryId,
+      reversedById: req.auth!.userId,
       reason,
     });
 

@@ -26,7 +26,9 @@ model User {
   roles         UserRole[]
   member        Member?
   posters       Post[]
-  financialRecords FinancialRecord[]
+  recordedFinancialRecords  FinancialRecord[] @relation("FinancialRecordRecordedBy")
+  cancelledFinancialRecords FinancialRecord[] @relation("FinancialRecordCancelledBy")
+  reversedFinancialRecords  FinancialRecord[] @relation("FinancialRecordReversedByUser")
   refreshTokens RefreshToken[]
   notifications Notification[]
 
@@ -301,6 +303,7 @@ model FinancialRecord {
   amount          Decimal
   method          PaymentMethod
   date            DateTime @default(now())
+  direction       TransactionDirection
 
   memberId        String?
   member          Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
@@ -309,25 +312,32 @@ model FinancialRecord {
   event           Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
   recordedById    String
-  recordedBy      User     @relation(fields: [recordedById], references: [id])
+  recordedBy      User     @relation("FinancialRecordRecordedBy", fields: [recordedById], references: [id], onDelete: Restrict)
 
   // 🧠 Status de negócio (ESSENCIAL)
   status          TransactionStatus @default(ACTIVE)
 
-  // 🔁 Reversão (auto-relacionamento)
-  reversalOfId    String?
-  reversalOf      FinancialRecord? @relation("Reversal", fields: [reversalOfId], references: [id])
-  reversedBy      FinancialRecord[] @relation("Reversal")
+  // 🔁 Reversão (auto-relacionamento 1:1)
+  reversalOfId    String?  @unique
+  reversalOf      FinancialRecord? @relation("FinancialRecordReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversedBy      FinancialRecord? @relation("FinancialRecordReversal")
 
   // 🧾 Metadados (editáveis)
   description     String?
   categoryId      String
-  category        Category @relation(fields: [categoryId], references: [id])
+  category        Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
-  // 🟡 Cancelamento (não é delete!)
+  // 🟡 Cancelamento (não é estorno!)
   cancelledAt     DateTime?
   cancelledById   String?
+  cancelledBy     User?    @relation("FinancialRecordCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
   cancelReason    String?
+
+  // 🔄 Estorno (auditoria própria)
+  reversedAt      DateTime?
+  reversedById    String?
+  reversedByUser  User?    @relation("FinancialRecordReversedByUser", fields: [reversedById], references: [id], onDelete: SetNull)
+  reverseReason   String?
 
   // 🕓 Auditoria
   createdAt       DateTime @default(now())
@@ -335,7 +345,7 @@ model FinancialRecord {
 
   @@index([date])
   @@index([status])
-  @@index([reversalOfId])
+  @@index([categoryId])
 }
 
 enum TransactionDirection {

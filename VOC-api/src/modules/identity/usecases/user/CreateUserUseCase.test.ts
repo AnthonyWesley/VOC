@@ -48,6 +48,21 @@ describe("CreateUserUseCase", () => {
     expect(userRepo.save).toHaveBeenCalledOnce();
   });
 
+  it("deve definir temporaryPasswordExpiresAt no futuro ao criar usuário", async () => {
+    const { useCase, userRepo } = makeMocks();
+    userRepo.findByEmail.mockResolvedValue(null);
+    let savedUser: any;
+    userRepo.save.mockImplementation((u: any) => { savedUser = u; });
+
+    await useCase.execute({ email: "future@test.com" });
+
+    expect(savedUser).toBeDefined();
+    expect(savedUser.isTemporaryPassword).toBe(true);
+    expect(savedUser.temporaryPasswordExpiresAt).toBeInstanceOf(Date);
+    expect(savedUser.temporaryPasswordExpiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect(savedUser.passwordChangedAt).toBeNull();
+  });
+
   it("deve lançar erro se email já existir", async () => {
     const { useCase, userRepo } = makeMocks();
     userRepo.findByEmail.mockResolvedValue({ id: "existing", email: "existing@test.com" } as any);

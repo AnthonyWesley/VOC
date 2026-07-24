@@ -144,10 +144,10 @@ export const financialRecordsService = {
     return response.data;
   },
 
-  reverse: async (financialRecordId: string, categoryId: string, reason: string) => {
+  reverse: async (financialRecordId: string, reason: string) => {
     const response = await churchApi.post(
       `/financial-records/${financialRecordId}/reverse`,
-      { categoryId, reason },
+      { reason },
     );
     return response.data;
   },
