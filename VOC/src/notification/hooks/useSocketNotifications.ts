@@ -6,24 +6,25 @@ import useAuthStatus from "../../auth/hooks/useAuthStatus";
 const SOCKET_URL = import.meta.env.VITE_API_URL || "http://localhost:3333";
 
 export function useSocketNotifications() {
-  const { isAuthenticated, authUserId } = useAuthStatus();
+  const { isAuthenticated } = useAuthStatus();
   const queryClient = useQueryClient();
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated || !authUserId) return;
+    if (!isAuthenticated) return;
 
     const socket = io(SOCKET_URL, {
       path: "/socket.io/",
       transports: ["websocket", "polling"],
-    });
-
-    socket.on("connect", () => {
-      socket.emit("auth", authUserId);
+      withCredentials: true,
     });
 
     socket.on("notification", () => {
       queryClient.invalidateQueries({ queryKey: ["notificationsData"] });
+    });
+
+    socket.on("connect_error", (err) => {
+      console.warn("[Socket] Connection error:", err.message);
     });
 
     socketRef.current = socket;
@@ -32,5 +33,5 @@ export function useSocketNotifications() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [isAuthenticated, authUserId, queryClient]);
+  }, [isAuthenticated, queryClient]);
 }
