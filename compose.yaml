@@ -21,5 +21,33 @@ services:
       retries: 10
       start_period: 5s
 
+  migrate:
+    build:
+      context: ./VOC-api
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-voc}:${POSTGRES_PASSWORD:-voc_local}@postgres:5432/${POSTGRES_DB:-voc}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "npx prisma migrate deploy"
+
+  api:
+    build:
+      context: ./VOC-api
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-voc}:${POSTGRES_PASSWORD:-voc_local}@postgres:5432/${POSTGRES_DB:-voc}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret}
+      NODE_ENV: production
+    ports:
+      - "${API_PORT:-3333}:3333"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   voc_postgres_data:
