@@ -378,11 +378,13 @@ export default async function seedTestData() {
   ];
 
   const categoryIds: Record<string, string> = {};
+  const categoryTypes: Record<string, "INCOME" | "EXPENSE"> = {};
   for (const c of categoriesData) {
     const cat = await prisma.category.create({
       data: { id: generateId(), name: c.name, type: c.type },
     });
     categoryIds[c.name] = cat.id;
+    categoryTypes[c.name] = c.type;
   }
 
   // ================================================================
@@ -546,73 +548,100 @@ export default async function seedTestData() {
   // ================================================================
   console.log("→ Criando registros financeiros...");
 
+  const adminUser = users["admin@test.com"];
+  const tesoureiroUser = users["tesoureiro@test.com"];
+
   const incomeCategories = ["Dízimo", "Oferta", "Doação"];
 
-  // Registros de entrada
+  // Registros de entrada (direction derivado da categoria)
   for (let i = 0; i < 5; i++) {
+    const catName = incomeCategories[i % incomeCategories.length];
     await prisma.financialRecord.create({
       data: {
         id: generateId(),
         amount: [100, 250, 500, 50, 1000][i],
-        method: ["CASH", "PIX", "CREDIT_CARD", "BANK_TRANSFER", "PIX"][
-          i
-        ] as any,
+        method: ["CASH", "PIX", "CREDIT_CARD", "BANK_TRANSFER", "PIX"][i] as any,
         date: daysAgo(i * 7),
+        direction: categoryTypes[catName],
         memberId: activeMembers[i % activeMembers.length],
         eventId: createdEvents[0].id,
-        recordedById: users["tesoureiro@test.com"].id,
+        recordedById: tesoureiroUser.id,
         status: "ACTIVE",
-        description: `${incomeCategories[i % incomeCategories.length]} - ${[100, 250, 500, 50, 1000][i]}`,
-        categoryId: categoryIds[incomeCategories[i % incomeCategories.length]],
+        description: `${catName} - ${[100, 250, 500, 50, 1000][i]}`,
+        categoryId: categoryIds[catName],
       },
     });
   }
 
-  // Registro de despesa
+  // Registro de despesa (direction derivado da categoria)
   await prisma.financialRecord.create({
     data: {
       id: generateId(),
       amount: 350,
       method: "BANK_TRANSFER",
       date: daysAgo(2),
-      recordedById: users["tesoureiro@test.com"].id,
+      direction: categoryTypes["Despesa"],
+      recordedById: tesoureiroUser.id,
       status: "ACTIVE",
       description: "Conta de luz",
       categoryId: categoryIds["Despesa"],
     },
   });
 
-  // Registro cancelado
-  const cancelledRecord = await prisma.financialRecord.create({
+  // Cenário 1: Cancelamento (sem estorno)
+  await prisma.financialRecord.create({
     data: {
       id: generateId(),
       amount: 30,
       method: "CASH",
       date: daysAgo(10),
+      direction: categoryTypes["Oferta"],
       memberId: activeMembers[0],
-      recordedById: users["tesoureiro@test.com"].id,
+      recordedById: tesoureiroUser.id,
       status: "CANCELLED",
-      description: "Cancelado - oferta duplicada",
+      description: "Oferta duplicada - cancelada",
       categoryId: categoryIds["Oferta"],
       cancelledAt: daysAgo(8),
-      cancelledById: users["admin@test.com"].id,
-      cancelReason: "Registro duplicado",
+      cancelledById: adminUser.id,
+      cancelReason: "Lançamento criado por engano",
     },
   });
 
-  // Estorno (reversal) — novo registro que referencia o cancelado
+  // Cenário 2: Estorno (original REVERSED + filho ACTIVE oposto)
+  const reversedOriginal = await prisma.financialRecord.create({
+    data: {
+      id: generateId(),
+      amount: 100,
+      method: "PIX",
+      date: daysAgo(8),
+      direction: categoryTypes["Oferta"],
+      memberId: activeMembers[2],
+      eventId: createdEvents[0].id,
+      recordedById: tesoureiroUser.id,
+      status: "REVERSED",
+      description: "Oferta duplicada",
+      categoryId: categoryIds["Oferta"],
+      reversedAt: daysAgo(8),
+      reversedById: adminUser.id,
+      reverseReason: "Registro duplicado",
+    },
+  });
+
+  // Reversal compensatório (direção oposta, mesmos vínculos)
   await prisma.financialRecord.create({
     data: {
       id: generateId(),
-      amount: 30,
-      method: "PIX",
-      date: daysAgo(8),
-      memberId: activeMembers[0],
-      recordedById: users["admin@test.com"].id,
+      amount: reversedOriginal.amount,
+      method: reversedOriginal.method,
+      date: reversedOriginal.date,
+      direction: "EXPENSE",
       status: "ACTIVE",
-      description: "Estorno do registro cancelado",
-      categoryId: categoryIds["Oferta"],
-      reversalOfId: cancelledRecord.id,
+      memberId: reversedOriginal.memberId,
+      eventId: reversedOriginal.eventId,
+      recordedById: adminUser.id,
+      description: `Estorno: ${reversedOriginal.description}`,
+      categoryId: reversedOriginal.categoryId,
+      reversalOfId: reversedOriginal.id,
     },
   });
 
@@ -699,6 +728,50 @@ export default async function seedTestData() {
       youtubeUrl: "https://youtube.com/@voctest",
     },
   });
+
+  // ================================================================
+  // VALIDAÇÃO DE INTEGRIDADE
+  // ================================================================
+  console.log("→ Validando integridade dos dados...");
+
+  const nullDirections = await prisma.financialRecord.count({
+    where: { direction: null },
+  });
+  if (nullDirections > 0) {
+    throw new Error(
+      `Seed created ${nullDirections} financial record(s) with null direction`,
+    );
+  }
+
+  const reversedWithoutChild = await prisma.financialRecord.count({
+    where: {
+      status: "REVERSED",
+      id: { notIn: (await prisma.financialRecord.findMany({
+        where: { reversalOfId: { not: null } },
+        select: { reversalOfId: true },
+      })).map(r => r.reversalOfId!).filter(Boolean) },
+    },
+  });
+  if (reversedWithoutChild > 0) {
+    throw new Error(
+      "Seed created REVERSED record(s) without a reversal child",
+    );
+  }
+
+  const cancelledWithChild = await prisma.financialRecord.count({
+    where: {
+      status: "CANCELLED",
+      id: { in: (await prisma.financialRecord.findMany({
+        where: { reversalOfId: { not: null } },
+        select: { reversalOfId: true },
+      })).map(r => r.reversalOfId!).filter(Boolean) },
+    },
+  });
+  if (cancelledWithChild > 0) {
+    throw new Error(
+      "Seed created CANCELLED record(s) with a reversal child",
+    );
+  }
 
   // ================================================================
   // RESUMO
