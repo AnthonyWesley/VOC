@@ -39,4 +39,8 @@ router.patch("/:postId/unpublish", auth, requireLevel(LEVEL.MINISTRY_LEADER), (r
   postController.unpublish(req, res),
 );
 
+router.delete("/:postId", auth, requireLevel(LEVEL.MINISTRY_LEADER), (req, res) =>
+  postController.delete(req, res),
+);
+
 export { router as postRoutes };

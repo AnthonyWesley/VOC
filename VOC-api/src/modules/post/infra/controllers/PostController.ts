@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { z } from "zod";
 
 import { CreatePostUseCase } from "../../usecases/CreatePostUseCase";
+import { DeletePostUseCase } from "../../usecases/DeletePostUseCase";
 import { PublishPostUseCase } from "../../usecases/PublishPostUseCase";
 import { UnpublishPostUseCase } from "../../usecases/UnpublishPostUseCase";
 import { UpdatePostUseCase } from "../../usecases/UpdatePostUseCase";
@@ -14,6 +15,7 @@ export class PostController {
   constructor(
     private readonly createPostUseCase: CreatePostUseCase,
     private readonly updatePostUseCase: UpdatePostUseCase,
+    private readonly deletePostUseCase: DeletePostUseCase,
     private readonly publishPostUseCase: PublishPostUseCase,
     private readonly unpublishPostUseCase: UnpublishPostUseCase,
     private readonly getPostUseCase: GetPostUseCase,
@@ -115,5 +117,16 @@ export class PostController {
     });
 
     return response.status(200).json(result);
+  }
+
+  async delete(request: Request, response: Response): Promise<Response> {
+    const postId = String(request.params.postId);
+
+    await this.deletePostUseCase.execute({
+      postId,
+      authUserId: request.auth!.userId,
+    });
+
+    return response.status(204).send();
   }
 }

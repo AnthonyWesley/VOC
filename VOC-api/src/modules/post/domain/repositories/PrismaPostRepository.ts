@@ -2,6 +2,7 @@
 
 import { Prisma, PrismaClient } from "@prisma/client";
 import { Post } from "../entities/Post";
+import { NotFoundError } from "../../../../shared/errors/NotFoundError";
 import { IPostRepository, PaginatedPostsResult, PostListItemDTO } from "./IPostRepository";
 
 export class PrismaPostRepository implements IPostRepository {
@@ -208,6 +209,13 @@ export class PrismaPostRepository implements IPostRepository {
   }
 
   async delete(id: string): Promise<void> {
-    await this.prisma.user.delete({ where: { id } });
+    try {
+      await this.prisma.post.delete({ where: { id } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+        throw new NotFoundError("POST_NOT_FOUND");
+      }
+      throw error;
+    }
   }
 }
