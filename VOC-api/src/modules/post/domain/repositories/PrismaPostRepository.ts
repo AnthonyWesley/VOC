@@ -21,13 +21,20 @@ export class PrismaPostRepository implements IPostRepository {
   async findDetails(params: {
     postId: string;
     authUserId?: string;
+    isAdmin?: boolean;
   }): Promise<PostListItemDTO | null> {
     const where: Prisma.PostWhereInput = { id: params.postId };
 
-    if (!params.authUserId) {
-      // Visitante ou usuário não autenticado
-      where.publishedAt = { not: null };
-      where.visibility = "PUBLIC";
+    if (!params.isAdmin) {
+      const conditions: Prisma.PostWhereInput[] = [];
+      conditions.push({ publishedAt: { not: null }, visibility: "PUBLIC" });
+
+      if (params.authUserId) {
+        conditions.push({ publishedAt: { not: null }, visibility: "INTERNAL" });
+        conditions.push({ authorId: params.authUserId });
+      }
+
+      where.OR = conditions;
     }
 
     const data = await this.prisma.post.findFirst({

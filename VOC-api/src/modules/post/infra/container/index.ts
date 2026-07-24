@@ -21,7 +21,7 @@ const remove = new DeletePostUseCase(postRepository, userRepository);
 const publish = new PublishPostUseCase(postRepository, userRepository);
 const unpublish = new UnpublishPostUseCase(postRepository, userRepository);
 const list = new ListPostsUseCase(postRepository, userRepository);
-const get = new GetPostUseCase(postRepository);
+const get = new GetPostUseCase(postRepository, userRepository);
 const getPublic = new GetPublicPostUseCase(postRepository);
 const listPublic = new ListPublicPostsUseCase(postRepository);
 

@@ -29,6 +29,7 @@ export interface IPostRepository {
   findDetails(params: {
     postId: string;
     authUserId?: string | null;
+    isAdmin?: boolean;
   }): Promise<PostListItemDTO | null>;
   findAll(params: {
     authUserId?: string;

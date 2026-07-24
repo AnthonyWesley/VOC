@@ -10,44 +10,30 @@ export interface GetPostInputDTO {
   authUserId: string | null;
   postId: string;
 }
-export interface GetPostResponseDTO {
-  posts: PostListItemDTO[];
-}
 
 export class GetPostUseCase {
-  constructor(private readonly postRepository: IPostRepository) {}
+  constructor(
+    private readonly postRepository: IPostRepository,
+    private readonly userRepository: IUserRepository,
+  ) {}
 
   async execute(input: GetPostInputDTO): Promise<PostListItemDTO> {
-    const { postId, authUserId } = input;
+    if (!input.postId) throw new ValidationError("MISSING_POST_ID");
 
-    if (!postId) {
-      throw new ValidationError("MISSING_POST_ID");
+    let isAdmin = false;
+    if (input.authUserId) {
+      const authUser = await this.userRepository.findById(input.authUserId);
+      isAdmin = authUser ? authUser.highestLevel >= 100 : false;
     }
 
     const post = await this.postRepository.findDetails({
-      postId: input?.postId,
-      authUserId: authUserId ?? null,
+      postId: input.postId,
+      authUserId: input.authUserId ?? null,
+      isAdmin,
     });
 
-    if (!post) {
-      throw new NotFoundError("POST_NOT_FOUND");
-    }
+    if (!post) throw new NotFoundError("POST_NOT_FOUND");
 
-    return {
-      id: post.id,
-      title: post.title,
-      content: post.content,
-      category: post.category,
-      imageUrl: post.imageUrl,
-      visibility: post.visibility,
-      authorId: post.authorId,
-      publishedAt: post.publishedAt,
-      createdAt: post.createdAt,
-      author: {
-        fullName: post.author.fullName ?? null,
-        photoUrl: post.author.photoUrl ?? null,
-        roles: post.author.roles ?? [],
-      },
-    };
+    return post;
   }
 }
