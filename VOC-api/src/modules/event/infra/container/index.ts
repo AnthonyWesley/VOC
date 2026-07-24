@@ -1,5 +1,6 @@
 import { prisma } from "../../../../package/prisma";
 import { PrismaEventRepository } from "../../domain/repositories/PrismaEventRepository";
+import { PrismaCategoryRepository } from "../../../category/domain/repositories/PrismaCategoryRepository";
 import { AssignMemberToEventUseCase } from "../../usecases/AssignMemberToEventUseCase";
 import { CloseEventWithSummaryUseCase } from "../../usecases/CloseEventWithSummaryUseCase";
 import { DeleteEventUseCase } from "../../usecases/DeleteEventUseCase";
@@ -11,19 +12,19 @@ import { RemoveMemberFromEventUseCase } from "../../usecases/RemoveMemberFromEve
 import { EventController } from "../controllers/EventController";
 import { socketServer } from "../../../../infra/socket/socketContainer";
 import { createNotificationUseCase } from "../../../notification/infra/container";
-import { whatsAppService } from "../../../../infra/whatsapp/whatsappContainer";
 
 const eventRepository = new PrismaEventRepository(prisma);
+const categoryRepository = new PrismaCategoryRepository(prisma);
 
-const close = new CloseEventWithSummaryUseCase(eventRepository, prisma, socketServer, createNotificationUseCase, whatsAppService);
+const close = new CloseEventWithSummaryUseCase(eventRepository, categoryRepository, prisma, socketServer, createNotificationUseCase);
 const get = new GetEventDetailedUseCase(eventRepository);
 const list = new ListEventsUseCase(eventRepository);
 const monthlyReport = new GetMonthlyEventReportUseCase(eventRepository);
 const softDelete = new DeleteEventUseCase(eventRepository);
 const update = new UpdateEventUseCase(eventRepository);
 
-const assignMember = new AssignMemberToEventUseCase(eventRepository, prisma, socketServer, createNotificationUseCase, whatsAppService);
-const removeMember = new RemoveMemberFromEventUseCase(eventRepository, prisma, socketServer, createNotificationUseCase, whatsAppService);
+const assignMember = new AssignMemberToEventUseCase(eventRepository, prisma, socketServer, createNotificationUseCase);
+const removeMember = new RemoveMemberFromEventUseCase(eventRepository, prisma, socketServer, createNotificationUseCase);
 
 export const eventController = new EventController(
   close,

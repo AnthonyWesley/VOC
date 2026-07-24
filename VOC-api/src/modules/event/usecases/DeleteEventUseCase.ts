@@ -14,10 +14,7 @@ export class DeleteEventUseCase {
 
   async execute(input: DeleteEventInput): Promise<void> {
     const event = await this.repo.findById(input.eventId);
-
-    if (!event) {
-      throw new NotFoundError("EVENT_NOT_FOUND");
-    }
+    if (!event) throw new NotFoundError("EVENT_NOT_FOUND");
 
     if (event.createdById !== input.deletedById && input.userLevel < 80) {
       throw new ForbiddenError("NOT_EVENT_OWNER", undefined, "Você não tem permissão para excluir este evento");
@@ -25,6 +22,6 @@ export class DeleteEventUseCase {
 
     event.delete(input.deletedById, input.reason);
 
-    await this.repo.saveWithAttendanceAndFinancial(event);
+    await this.repo.softDelete(event.id, input.deletedById, input.reason);
   }
 }

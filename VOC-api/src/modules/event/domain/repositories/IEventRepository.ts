@@ -6,9 +6,16 @@ import { Event } from "../entities/Event";
 import { EventAttendance } from "../entities/EventAttendance";
 import { FinancialRecord } from "../../../financialRecord/domain/entities/FinancialRecord";
 
+export type MarkAsFinishedInput = {
+  id: string;
+  endsAt: Date;
+};
+
 export interface IEventRepository {
   findDetailedEvent(id: string): Promise<DetailedEventDTO | null>;
   findById(id: string): Promise<Event | null>;
+  findAssignment(eventId: string, memberId: string, ministryId: string): Promise<{ id: string } | null>;
+  findMemberAttendance(eventId: string, memberId: string): Promise<{ eventId: string; memberId: string } | null>;
   findAll(params: {
     limit: number;
     cursor?: string | null;
@@ -44,13 +51,15 @@ export interface IEventRepository {
       averageMembers: number;
     };
   }>;
-  save(event: Event): Promise<void>;
+  create(event: Event): Promise<void>;
+  update(event: Event): Promise<void>;
   saveWithAttendanceAndFinancial(
     event: Event,
     attendance?: EventAttendance,
     financialRecords?: FinancialRecord[],
   ): Promise<void>;
-  delete(id: string): Promise<void>;
+  markAsFinishedIfScheduled(input: MarkAsFinishedInput): Promise<boolean>;
+  softDelete(id: string, deletedById: string, reason?: string): Promise<void>;
   assignAssignment(
     eventId: string,
     memberId: string,

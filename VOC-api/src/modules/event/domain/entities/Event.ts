@@ -1,6 +1,7 @@
 import { AttendanceMode, EventType } from "@prisma/client";
 import { generateId } from "../../../../shared/utils/generateId";
 import { ConflictError } from "../../../../shared/errors/ConflictError";
+import { ValidationError } from "../../../../shared/errors/ValidationError";
 
 export type EventProps = {
   id: string;
@@ -28,21 +29,28 @@ export type CreateEventProps = {
   attendanceMode: AttendanceMode;
   needsScale?: boolean;
   createdById?: string | null;
-
   preacherId?: string | null;
   theme?: string | null;
   notes?: string | null;
 };
 
+export type UpdateEventProps = {
+  title?: string | null;
+  preacherId?: string | null;
+  theme?: string | null;
+  notes?: string | null;
+};
+
+export type FinishEventProps = {
+  endsAt: Date;
+};
+
 export class Event {
   private constructor(private props: EventProps) {}
 
-  // ---------------------------
-  // CREATE
-  // ---------------------------
   public static create(data: CreateEventProps): Event {
-    if (!data.type) throw new Error("Event type is required");
-    if (!data.startsAt) throw new Error("StartsAt date is required");
+    if (!data.type) throw new ValidationError("MISSING_EVENT_TYPE");
+    if (!data.startsAt) throw new ValidationError("MISSING_STARTS_AT");
 
     const now = new Date();
 
@@ -63,26 +71,18 @@ export class Event {
     });
   }
 
-  // ---------------------------
-  // REHYDRATE
-  // ---------------------------
   public static rehydrate(props: EventProps): Event {
     return new Event({ ...props });
   }
 
-  // ---------------------------
-  // UPDATE
-  // ---------------------------
-  public update(data: Partial<CreateEventProps>): void {
-    let changed = false;
+  public update(data: UpdateEventProps): void {
+    if (this.props.deletedAt) {
+      throw new ConflictError("EVENT_ALREADY_DELETED");
+    }
 
-    const fields: (keyof CreateEventProps)[] = [
-      "title",
-      "type",
-      "startsAt",
-      "preacherId",
-      "theme",
-      "notes",
+    let changed = false;
+    const fields: (keyof UpdateEventProps)[] = [
+      "title", "preacherId", "theme", "notes",
     ];
 
     for (const field of fields) {
@@ -97,9 +97,6 @@ export class Event {
     }
   }
 
-  // ---------------------------
-  // DELETE (soft delete)
-  // ---------------------------
   public delete(deletedById: string, reason?: string) {
     if (this.props.deletedAt) {
       throw new ConflictError("EVENT_ALREADY_DELETED");
@@ -110,66 +107,34 @@ export class Event {
     this.props.deleteReason = reason ?? null;
   }
 
-  public finishEvent() {
-    this.props.endsAt = new Date();
+  public finishEvent(data: FinishEventProps): void {
+    if (this.props.deletedAt) {
+      throw new ConflictError("EVENT_ALREADY_DELETED");
+    }
+
+    if (data.endsAt < this.props.startsAt) {
+      throw new ValidationError("ENDS_AT_BEFORE_STARTS_AT");
+    }
+
+    this.props.endsAt = data.endsAt;
+    this.props.updatedAt = new Date();
   }
 
-  // ---------------------------
-  // GETTERS
-  // ---------------------------
-  public get id() {
-    return this.props.id;
-  }
-
-  public get title() {
-    return this.props.title;
-  }
-
-  public get type() {
-    return this.props.type;
-  }
-
-  public get attendanceMode() {
-    return this.props.attendanceMode;
-  }
-
-  public get startsAt() {
-    return this.props.startsAt;
-  }
-
-  public get endsAt() {
-    return this.props.endsAt;
-  }
-
-  public get createdById() {
-    return this.props.createdById;
-  }
-
-  public get preacherId() {
-    return this.props.preacherId;
-  }
-
-  public get theme() {
-    return this.props.theme;
-  }
-
-  public get notes() {
-    return this.props.notes;
-  }
-
-  public get needsScale() {
-    return this.props.needsScale;
-  }
-
-  public get createdAt() {
-    return this.props.createdAt;
-  }
-
-  public get updatedAt() {
-    return this.props.updatedAt;
-  }
-
-  public get deletedAt() {
-    return this.props.deletedAt;
-  }
+  public get id() { return this.props.id; }
+  public get title() { return this.props.title; }
+  public get type() { return this.props.type; }
+  public get attendanceMode() { return this.props.attendanceMode; }
+  public get startsAt() { return this.props.startsAt; }
+  public get endsAt() { return this.props.endsAt; }
+  public get createdById() { return this.props.createdById; }
+  public get preacherId() { return this.props.preacherId; }
+  public get theme() { return this.props.theme; }
+  public get notes() { return this.props.notes; }
+  public get needsScale() { return this.props.needsScale; }
+  public get createdAt() { return this.props.createdAt; }
+  public get updatedAt() { return this.props.updatedAt; }
+  public get deletedAt() { return this.props.deletedAt; }
+  public get deletedById() { return this.props.deletedById; }
+  public get deleteReason() { return this.props.deleteReason; }
+  public get isDeleted(): boolean { return !!this.props.deletedAt; }
 }

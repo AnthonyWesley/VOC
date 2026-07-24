@@ -13,14 +13,11 @@ export type UpdateEventInput = {
 };
 
 export class UpdateEventUseCase {
-  constructor(private readonly eventRepository: IEventRepository) {}
+  constructor(private readonly repo: IEventRepository) {}
 
   async execute(input: UpdateEventInput): Promise<void> {
-    const event = await this.eventRepository.findById(input.eventId);
-
-    if (!event) {
-      throw new NotFoundError("Event not found");
-    }
+    const event = await this.repo.findById(input.eventId);
+    if (!event) throw new NotFoundError("EVENT_NOT_FOUND");
 
     if (event.createdById !== input.userId && input.userLevel < 80) {
       throw new ForbiddenError("NOT_EVENT_OWNER", undefined, "Você não tem permissão para editar este evento");
@@ -33,6 +30,6 @@ export class UpdateEventUseCase {
       notes: input.notes ?? undefined,
     });
 
-    await this.eventRepository.save(event);
+    await this.repo.update(event);
   }
 }

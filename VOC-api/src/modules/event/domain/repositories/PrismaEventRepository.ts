@@ -1,13 +1,14 @@
 import {
   AttendanceMode,
-  EventAttendance,
   EventType,
   Prisma,
   PrismaClient,
   TransactionDirection,
 } from "@prisma/client";
 import { Event } from "../entities/Event";
-import { IEventRepository } from "./IEventRepository";
+import { EventAttendance } from "../entities/EventAttendance";
+import { FinancialRecord } from "../../../financialRecord/domain/entities/FinancialRecord";
+import { IEventRepository, MarkAsFinishedInput } from "./IEventRepository";
 import { DetailedEventDTO } from "../../usecases/GetEventDetailedUseCase";
 import { ListEventsInput } from "../../usecases/ListEventsUseCase";
 
@@ -411,44 +412,88 @@ export class PrismaEventRepository implements IEventRepository {
     return { events, nextCursor };
   }
 
-  async save(event: Event): Promise<void> {
-    await this.prisma.event.upsert({
-      where: { id: event.id },
-      update: {
-        title: event.title,
-        type: event.type,
-        startsAt: event.startsAt,
-        attendanceMode: event.attendanceMode,
-        needsScale: event.needsScale,
-        preacherId: event.preacherId,
-        theme: event.theme,
-        notes: event.notes,
-        updatedAt: new Date(),
-      },
-      create: {
+  async create(event: Event): Promise<void> {
+    await this.prisma.event.create({
+      data: {
         id: event.id,
         title: event.title,
-        attendanceMode: event.attendanceMode,
         type: event.type,
+        attendanceMode: event.attendanceMode,
         startsAt: event.startsAt,
         needsScale: event.needsScale,
         preacherId: event.preacherId,
         theme: event.theme,
         notes: event.notes,
         createdById: event.createdById ?? null,
+        createdAt: event.createdAt,
+        updatedAt: event.updatedAt,
       },
+    });
+  }
+
+  async update(event: Event): Promise<void> {
+    await this.prisma.event.update({
+      where: { id: event.id },
+      data: {
+        title: event.title,
+        type: event.type,
+        startsAt: event.startsAt,
+        endsAt: event.endsAt,
+        attendanceMode: event.attendanceMode,
+        needsScale: event.needsScale,
+        preacherId: event.preacherId,
+        theme: event.theme,
+        notes: event.notes,
+        deletedAt: event.deletedAt ?? null,
+        deletedById: event.deletedById ?? null,
+        deleteReason: event.deleteReason ?? null,
+        updatedAt: event.updatedAt,
+      },
+    });
+  }
+
+  async markAsFinishedIfScheduled(input: MarkAsFinishedInput): Promise<boolean> {
+    const result = await this.prisma.event.updateMany({
+      where: { id: input.id, endsAt: null, deletedAt: null },
+      data: { endsAt: input.endsAt },
+    });
+    return result.count === 1;
+  }
+
+  async softDelete(id: string, deletedById: string, reason?: string): Promise<void> {
+    await this.prisma.event.update({
+      where: { id },
+      data: { deletedAt: new Date(), deletedById, deleteReason: reason ?? null },
+    });
+  }
+
+  async findAssignment(
+    eventId: string, memberId: string, ministryId: string,
+  ): Promise<{ id: string } | null> {
+    return this.prisma.eventAssignment.findUnique({
+      where: { eventId_memberId_ministryId: { eventId, memberId, ministryId } },
+      select: { id: true },
+    });
+  }
+
+  async findMemberAttendance(
+    eventId: string, memberId: string,
+  ): Promise<{ eventId: string; memberId: string } | null> {
+    return this.prisma.eventMember.findUnique({
+      where: { eventId_memberId: { eventId, memberId } },
+      select: { eventId: true, memberId: true },
     });
   }
 
   async saveWithAttendanceAndFinancial(
     event: Event,
     attendance?: EventAttendance,
+    financialRecords?: FinancialRecord[],
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      // 1️⃣ Upsert do evento
-      await tx.event.upsert({
+      await tx.event.update({
         where: { id: event.id },
-        update: {
+        data: {
           title: event.title,
           type: event.type,
           startsAt: event.startsAt,
@@ -460,21 +505,8 @@ export class PrismaEventRepository implements IEventRepository {
           notes: event.notes,
           updatedAt: new Date(),
         },
-        create: {
-          id: event.id,
-          title: event.title,
-          type: event.type,
-          attendanceMode: event.attendanceMode,
-          needsScale: event.needsScale,
-          startsAt: event.startsAt,
-          preacherId: event.preacherId,
-          theme: event.theme,
-          notes: event.notes,
-          createdById: event.createdById ?? null,
-        },
       });
 
-      // 2️⃣ Upsert da attendance, se fornecida
       if (attendance) {
         await tx.eventAttendance.upsert({
           where: { eventId: event.id },
@@ -490,13 +522,27 @@ export class PrismaEventRepository implements IEventRepository {
           },
         });
       }
-    });
-  }
 
-  async delete(id: string): Promise<void> {
-    await this.prisma.event.update({
-      where: { id },
-      data: { deletedAt: new Date() },
+      for (const fr of financialRecords ?? []) {
+        await tx.financialRecord.create({
+          data: {
+            id: fr.id,
+            amount: fr.amount,
+            method: fr.method,
+            date: fr.date,
+            direction: fr.direction,
+            status: fr.status,
+            description: fr.description,
+            categoryId: fr.categoryId,
+            memberId: fr.memberId,
+            eventId: event.id,
+            recordedById: fr.recordedById,
+            reversalOfId: fr.reversalOfId ?? null,
+            createdAt: fr.createdAt,
+            updatedAt: fr.updatedAt,
+          },
+        });
+      }
     });
   }
 
@@ -512,30 +558,19 @@ export class PrismaEventRepository implements IEventRepository {
     ministryId: string,
   ): Promise<void> {
     await this.prisma.eventAssignment.create({
-      data: {
-        eventId,
-        memberId,
-        ministryId,
-        assignedAt: new Date(),
-      },
+      data: { eventId, memberId, ministryId, assignedAt: new Date() },
     });
   }
 
   async removeMember(eventId: string, memberId: string): Promise<void> {
     await this.prisma.eventMember.delete({
-      where: {
-        eventId_memberId: {
-          eventId,
-          memberId,
-        },
-      },
+      where: { eventId_memberId: { eventId, memberId } },
     });
   }
+
   async removeAssignment(assignmentId: string): Promise<void> {
     await this.prisma.eventAssignment.deleteMany({
-      where: {
-        id: assignmentId,
-      },
+      where: { id: assignmentId },
     });
   }
 }
