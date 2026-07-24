@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { createServer } from "http";
-import { app } from "./main";
+import { app } from "./app";
 import { SocketServer } from "./infra/socket/SocketServer";
 import { setSocketServer } from "./infra/socket/socketContainer";
 import { setWhatsAppService } from "./infra/whatsapp/whatsappContainer";
