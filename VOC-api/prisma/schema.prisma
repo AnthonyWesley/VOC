@@ -177,11 +177,12 @@ model EventMember {
   eventId   String
   memberId  String
   joinedAt  DateTime @default(now())
+  participantType EventParticipantType @default(MEMBER)
 
   event     Event   @relation(fields: [eventId], references: [id])
   member    Member  @relation(fields: [memberId], references: [id])
 
-  @@id([eventId, memberId]) // garante que um membro só pode estar uma vez no evento
+  @@id([eventId, memberId])
 }
 
 model Category {
@@ -238,43 +239,60 @@ enum AttendanceMode {
   SUMMARY
 }
 
+enum EventStatus {
+  SCHEDULED
+  FINISHED
+  CANCELLED
+}
+
+enum EventParticipantType {
+  MEMBER
+  VISITOR
+}
+
 model Event {
-  id             String        @id @default(uuid())
+  id               String        @id @default(uuid())
 
-  title          String?
-  type           EventType
+  title            String?
+  type             EventType
+  status           EventStatus   @default(SCHEDULED)
 
-  startsAt       DateTime
-  endsAt         DateTime?
+  startsAt         DateTime
+  endsAt           DateTime?
 
-  theme          String?
-  notes          String?
+  theme            String?
+  notes            String?
 
-  needsScale     Boolean @default(false)
+  needsScale       Boolean       @default(false)
 
-  preacherId String?
-  preacher   Member? @relation("EventPreacher", fields: [preacherId], references: [id])
-  attendanceMode AttendanceMode
+  closeOperationId String?       @unique
 
-  members        EventMember[]
-  assignments    EventAssignment[]
-  attendance     EventAttendance?
+  preacherId       String?
+  preacher         Member?       @relation("EventPreacher", fields: [preacherId], references: [id])
+  attendanceMode   AttendanceMode
+
+  members          EventMember[]
+  assignments      EventAssignment[]
+  attendance       EventAttendance?
 
   financialRecords FinancialRecord[]
 
-  createdById    String?
-  createdBy      User? @relation("EventCreatedBy", fields: [createdById], references: [id])
+  createdById      String?
+  createdBy        User?         @relation("EventCreatedBy", fields: [createdById], references: [id])
 
-  deletedAt      DateTime?
-  deletedById    String?
-  deletedBy      User? @relation("EventDeletedBy", fields: [deletedById], references: [id])
-  deleteReason   String?
+  deletedAt        DateTime?
+  deletedById      String?
+  deletedBy        User?         @relation("EventDeletedBy", fields: [deletedById], references: [id])
+  deleteReason     String?
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   @@index([startsAt])
   @@index([type])
+  @@index([status])
+  @@index([deletedAt, startsAt])
+  @@index([createdById])
 }
 
 enum EventType {
