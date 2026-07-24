@@ -1,3 +1,6 @@
 
+# Docker env (real config, not example)
+.env.docker
+
 # Submodules
 VOC-mobile/

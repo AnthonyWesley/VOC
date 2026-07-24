@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-voc}
+      POSTGRES_USER: ${POSTGRES_USER:-voc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voc_local}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - voc_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-voc} -d ${POSTGRES_DB:-voc}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  voc_postgres_data:
