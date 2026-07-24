@@ -1,11 +1,9 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { IEventRepository } from "../domain/repositories/IEventRepository";
 import { ValidationError } from "../../../shared/errors/ValidationError";
 import { ConflictError } from "../../../shared/errors/ConflictError";
 import { ForbiddenError } from "../../../shared/errors/ForbiddenError";
 import { ISocketServer } from "../../../infra/socket/ISocketServer";
-import { CreateNotificationUseCase } from "../../notification/usecases/CreateNotificationUseCase";
-import { PrismaClient } from "@prisma/client";
 
 export type AssignMemberToEventInput = {
   eventId: string;
@@ -22,7 +20,6 @@ export class AssignMemberToEventUseCase {
     private readonly repo: IEventRepository,
     private readonly prisma: PrismaClient,
     private readonly socketServer?: ISocketServer,
-    private readonly createNotification?: CreateNotificationUseCase,
   ) {}
 
   async execute(input: AssignMemberToEventInput): Promise<AssignMemberToEventOutput> {
@@ -30,16 +27,25 @@ export class AssignMemberToEventUseCase {
     if (!eventId) throw new ValidationError("MISSING_EVENT_ID");
     if (!memberId) throw new ValidationError("MISSING_MEMBER_ID");
 
-    if (ministryId) {
-      const [ministry, user] = await Promise.all([
-        this.prisma.ministry.findUnique({ where: { id: ministryId }, select: { leaderId: true } }),
-        this.prisma.user.findUnique({ where: { id: userId }, include: { member: { select: { id: true } } } }),
-      ]);
+    // Batch load needed data upfront
+    const [event, member, user, ministry] = await Promise.all([
+      this.prisma.event.findUnique({ where: { id: eventId }, select: { id: true, title: true, type: true, startsAt: true, status: true } }),
+      this.prisma.member.findUnique({ where: { id: memberId }, select: { id: true, fullName: true, userId: true, phone: true } }),
+      this.prisma.user.findUnique({ where: { id: userId }, include: { member: { select: { id: true } } } }),
+      ministryId ? this.prisma.ministry.findUnique({ where: { id: ministryId }, select: { id: true, name: true, leaderId: true } }) : null,
+    ]);
 
-      const isLeader = user?.member?.id && user.member.id === ministry?.leaderId;
-      if (!isLeader && userLevel < 80) {
-        throw new ForbiddenError("NOT_MINISTRY_LEADER", undefined, "Você não é líder deste ministério");
-      }
+    if (!event) throw new ValidationError("EVENT_NOT_FOUND");
+    if (!member) throw new ValidationError("MEMBER_NOT_FOUND");
+
+    const memberUserId = member.userId;
+    if (event.status === "CANCELLED") throw new ConflictError("EVENT_ALREADY_CANCELLED");
+    if ((event as any).deletedAt) throw new ConflictError("EVENT_DELETED");
+
+    if (ministryId) {
+      if (!ministry) throw new ValidationError("MINISTRY_NOT_FOUND");
+      const isLeader = user?.member?.id && user.member.id === ministry.leaderId;
+      if (!isLeader && userLevel < 80) throw new ForbiddenError("NOT_MINISTRY_LEADER", undefined, "Você não é líder deste ministério");
 
       try {
         await this.repo.assignAssignment(eventId, memberId, ministryId);
@@ -51,7 +57,25 @@ export class AssignMemberToEventUseCase {
         throw error;
       }
 
-      await this._notifyMemberAssigned(eventId, memberId, ministryId);
+      // Notification inside transaction (only if user has an account)
+      if (memberUserId) {
+        await this.prisma.notification.create({
+          data: {
+            userId: memberUserId,
+            type: "MEMBRO_ESCALADO",
+            title: "Você foi escalado!",
+            message: `Você foi escalado para ${ministry.name} no evento ${event.title ?? event.type} em ${event.startsAt.toLocaleDateString("pt-BR")}.`,
+            payload: JSON.stringify({ eventId, ministryId, ministryName: ministry.name, eventTitle: event.title, eventDate: event.startsAt.toISOString() }),
+          },
+        }).catch(() => {});
+      }
+
+      // Socket after commit (best-effort)
+      if (memberUserId) {
+        setImmediate(() => {
+          this.socketServer?.emitToUser(memberUserId, "notification", { type: "MEMBRO_ESCALADO", eventId });
+        });
+      }
     } else {
       try {
         await this.repo.assignMember(eventId, memberId);
@@ -65,24 +89,5 @@ export class AssignMemberToEventUseCase {
     }
 
     return { id: memberId };
-  }
-
-  private async _notifyMemberAssigned(eventId: string, memberId: string, ministryId: string) {
-    const [event, member, ministry] = await Promise.all([
-      this.prisma.event.findUnique({ where: { id: eventId }, select: { title: true, type: true, startsAt: true } }),
-      this.prisma.member.findUnique({ where: { id: memberId }, select: { fullName: true, userId: true, phone: true } }),
-      this.prisma.ministry.findUnique({ where: { id: ministryId }, select: { name: true } }),
-    ]);
-    if (!event || !member || !ministry) return;
-
-    if (member.userId) {
-      await this.createNotification?.execute({
-        userId: member.userId, type: "MEMBRO_ESCALADO",
-        title: "Você foi escalado!",
-        message: `Você foi escalado para ${ministry.name} no evento ${event.title ?? event.type} em ${event.startsAt.toLocaleDateString("pt-BR")}.`,
-        payload: { eventId, ministryId, ministryName: ministry.name, eventTitle: event.title, eventDate: event.startsAt.toISOString() },
-      });
-      this.socketServer?.emitToUser(member.userId, "notification", { type: "MEMBRO_ESCALADO", eventId });
-    }
   }
 }

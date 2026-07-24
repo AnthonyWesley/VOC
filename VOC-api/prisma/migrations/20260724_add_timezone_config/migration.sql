@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "SiteContentSettings" ADD COLUMN     "timezone" TEXT NOT NULL DEFAULT 'America/Sao_Paulo';

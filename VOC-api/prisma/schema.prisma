@@ -439,6 +439,7 @@ enum PostCategory {
 
 model SiteContentSettings {
   id                String   @id @default("main")
+  timezone          String   @default("America/Sao_Paulo")
   churchName        String   @default("VOC Church")
   heroTitle         String   @default("VOC Church")
   heroSubtitle      String   @default("Uma comunidade de fe, amor e transformacao.")

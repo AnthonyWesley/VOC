@@ -57,6 +57,14 @@ export interface IEventRepository {
       totalVisitors: number;
       averageMembers: number;
     };
+    individual: {
+      events: number;
+      membersPresent: number;
+      visitorsPresent: number;
+      averageMembersPresent: number | null;
+      averageVisitorsPresent: number | null;
+    };
+    cancelledEvents: number;
   }>;
   create(event: Event): Promise<void>;
   update(event: Event): Promise<void>;

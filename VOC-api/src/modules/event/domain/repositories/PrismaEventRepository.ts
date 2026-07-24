@@ -12,9 +12,20 @@ import { FinancialRecord } from "../../../financialRecord/domain/entities/Financ
 import { IEventRepository, MarkAsCancelledInput, MarkAsFinishedInput } from "./IEventRepository";
 import { DetailedEventDTO } from "../../usecases/GetEventDetailedUseCase";
 import { ListEventsInput } from "../../usecases/ListEventsUseCase";
+import { buildMonthRangeUtc } from "../../../../shared/utils/timezone";
 
 export class PrismaEventRepository implements IEventRepository {
+  private _timezone: string | null = null;
+
   constructor(private readonly prisma: PrismaClient) {}
+
+  private async getTimezone(): Promise<string> {
+    if (!this._timezone) {
+      const settings = await this.prisma.siteContentSettings.findUnique({ where: { id: "main" } });
+      this._timezone = settings?.timezone ?? "America/Sao_Paulo";
+    }
+    return this._timezone;
+  }
 
   async findDetailedEvent(id: string): Promise<DetailedEventDTO | null> {
     const data = await this.prisma.event.findUnique({
@@ -230,18 +241,10 @@ export class PrismaEventRepository implements IEventRepository {
     });
   }
 
-  private buildMonthRange(year?: number, month?: number) {
-    const y = year ?? new Date().getFullYear();
-    const m = month ?? new Date().getMonth() + 1;
-
-    if (m < 1 || m > 12) {
-      throw new Error("Invalid month");
-    }
-
-    const start = new Date(Date.UTC(y, m - 1, 1));
-    const end = new Date(Date.UTC(y, m, 1));
-
-    return { gte: start, lt: end };
+  private async buildMonthRangeTz(year: number, month: number) {
+    const tz = await this.getTimezone();
+    if (month < 1 || month > 12) throw new Error("Invalid month");
+    return buildMonthRangeUtc(tz, year, month);
   }
 
   async getMonthlyReport(params: {
@@ -268,102 +271,87 @@ export class PrismaEventRepository implements IEventRepository {
       totalVisitors: number;
       averageMembers: number;
     };
-  }> {
-    const where: Prisma.EventWhereInput = {
-      deletedAt: null,
-      startsAt: this.buildMonthRange(params.year, params.month),
+    individual: {
+      events: number;
+      membersPresent: number;
+      visitorsPresent: number;
+      averageMembersPresent: number | null;
+      averageVisitorsPresent: number | null;
     };
+    cancelledEvents: number;
+  }> {
+    const range = await this.buildMonthRangeTz(params.year, params.month);
+    const where: Prisma.EventWhereInput = { deletedAt: null, startsAt: range };
 
-    if (params.type) {
-      where.type = params.type;
-    }
+    if (params.type) where.type = params.type;
 
-    const data = await this.prisma.event.findMany({
-      where,
-      orderBy: { startsAt: "desc" },
-      select: {
-        id: true,
-        title: true,
-        type: true,
-        startsAt: true,
-        attendanceMode: true,
-        attendance: {
-          select: {
-            membersCount: true,
-            visitorsCount: true,
-          },
+    const [data, cancelledCount] = await Promise.all([
+      this.prisma.event.findMany({
+        where: { ...where, status: { not: "CANCELLED" } },
+        orderBy: { startsAt: "desc" },
+        select: {
+          id: true, title: true, type: true, startsAt: true,
+          status: true, attendanceMode: true,
+          attendance: { select: { membersCount: true, visitorsCount: true } },
+          preacher: { select: { fullName: true } },
+          members: { select: { participantType: true } },
+          assignments: { select: { id: true } },
         },
-        preacher: {
-          select: {
-            fullName: true,
-          },
-        },
-        members: {
-          select: {
-            member: {
-              select: {
-                churchJoinDate: true,
-              },
-            },
-          },
-        },
-        assignments: {
-          select: {
-            id: true,
-          },
-        },
-      },
+      }),
+      this.prisma.event.count({
+        where: { ...where, status: "CANCELLED" },
+      }),
+    ]);
+
+    const summaryEvents = data.filter(e => e.attendanceMode === "SUMMARY");
+    const individualEvents = data.filter(e => e.attendanceMode === "INDIVIDUAL");
+
+    const calcSummary = (events: typeof summaryEvents) => ({
+      membersCount: events.reduce((s, e) => s + (e.attendance?.membersCount ?? 0), 0),
+      visitorsCount: events.reduce((s, e) => s + (e.attendance?.visitorsCount ?? 0), 0),
     });
 
-    const events = data.map((item) => {
-      const membersCount =
-        item.attendanceMode === "INDIVIDUAL"
-          ? item.members.filter(
-              (member) => member.member.churchJoinDate <= item.startsAt,
-            ).length
-          : item.attendance?.membersCount ?? 0;
+    const calcIndividual = (events: typeof individualEvents) => ({
+      membersPresent: events.reduce((s, e) => s + e.members.filter(m => m.participantType === "MEMBER").length, 0),
+      visitorsPresent: events.reduce((s, e) => s + e.members.filter(m => m.participantType === "VISITOR").length, 0),
+    });
 
-      const visitorsCount =
-        item.attendanceMode === "INDIVIDUAL"
-          ? item.members.filter(
-              (member) => member.member.churchJoinDate > item.startsAt,
-            ).length
-          : item.attendance?.visitorsCount ?? 0;
+    const s = calcSummary(summaryEvents);
+    const ind = calcIndividual(individualEvents);
 
+    const eventList = data.map(item => {
+      let membersCount = 0, visitorsCount = 0;
+      if (item.attendanceMode === "INDIVIDUAL") {
+        membersCount = item.members.filter(m => m.participantType === "MEMBER").length;
+        visitorsCount = item.members.filter(m => m.participantType === "VISITOR").length;
+      } else {
+        membersCount = item.attendance?.membersCount ?? 0;
+        visitorsCount = item.attendance?.visitorsCount ?? 0;
+      }
       return {
-        id: item.id,
-        title: item.title,
-        type: item.type,
-        startsAt: item.startsAt,
-        preacherName: item.preacher?.fullName ?? null,
-        membersCount,
-        visitorsCount,
-        assignmentsCount: item.assignments.length,
+        id: item.id, title: item.title, type: item.type,
+        startsAt: item.startsAt, preacherName: item.preacher?.fullName ?? null,
+        membersCount, visitorsCount, assignmentsCount: item.assignments.length,
         attendanceMode: item.attendanceMode,
       };
     });
 
-    const totalMembers = events.reduce(
-      (sum, event) => sum + event.membersCount,
-      0,
-    );
-    const totalVisitors = events.reduce(
-      (sum, event) => sum + event.visitorsCount,
-      0,
-    );
-
     return {
-      month: params.month,
-      year: params.year,
-      events,
+      month: params.month, year: params.year, events: eventList,
       summary: {
-        totalEvents: events.length,
-        totalMembers,
-        totalVisitors,
-        averageMembers: events.length
-          ? Number((totalMembers / events.length).toFixed(2))
-          : 0,
+        totalEvents: summaryEvents.length,
+        totalMembers: s.membersCount,
+        totalVisitors: s.visitorsCount,
+        averageMembers: summaryEvents.length ? Number((s.membersCount / summaryEvents.length).toFixed(2)) : 0,
       },
+      individual: {
+        events: individualEvents.length,
+        membersPresent: ind.membersPresent,
+        visitorsPresent: ind.visitorsPresent,
+        averageMembersPresent: individualEvents.length ? Number((ind.membersPresent / individualEvents.length).toFixed(2)) : null,
+        averageVisitorsPresent: individualEvents.length ? Number((ind.visitorsPresent / individualEvents.length).toFixed(2)) : null,
+      },
+      cancelledEvents: cancelledCount,
     };
   }
 
@@ -372,27 +360,44 @@ export class PrismaEventRepository implements IEventRepository {
     nextCursor: string | null;
   }> {
     const { limit, cursor, type, month, year } = params;
+    const range = await this.buildMonthRangeTz(year ?? new Date().getFullYear(), month ?? new Date().getMonth() + 1);
 
     const where: Prisma.EventWhereInput = {
       deletedAt: null,
-      startsAt: this.buildMonthRange(year, month),
+      startsAt: range,
     };
 
     if (type) where.type = type;
 
+    // Composite cursor parsing
+    let cursorCondition: Prisma.EventWhereInput | undefined;
+    if (cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(cursor, "base64url").toString());
+        cursorCondition = {
+          OR: [
+            { startsAt: { lt: new Date(decoded.startsAt) } },
+            {
+              startsAt: new Date(decoded.startsAt),
+              id: { lt: decoded.id },
+            },
+          ],
+        };
+      } catch {
+        cursorCondition = { id: { lt: cursor } };
+      }
+    }
+
     const data = await this.prisma.event.findMany({
-      where,
+      where: { ...where, ...(cursorCondition ? { AND: [where, cursorCondition] } : {}) },
       take: limit + 1,
-      skip: cursor ? 1 : 0,
-      cursor: cursor ? { id: cursor } : undefined,
-      orderBy: { startsAt: "desc" },
+      orderBy: [{ startsAt: "desc" }, { id: "desc" }],
     });
 
     let nextCursor: string | null = null;
-
     if (data.length > limit) {
-      const nextItem = data.pop();
-      nextCursor = nextItem!.id;
+      const nextItem = data.pop()!;
+      nextCursor = Buffer.from(JSON.stringify({ startsAt: nextItem.startsAt.toISOString(), id: nextItem.id })).toString("base64url");
     }
 
     const events = data.map((item) =>

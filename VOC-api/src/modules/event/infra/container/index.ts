@@ -27,7 +27,7 @@ const update = new UpdateEventUseCase(eventRepository);
 const cancelEvent = new CancelEventUseCase(eventRepository);
 const correctEvent = new CorrectEventUseCase(eventRepository, prisma);
 
-const assignMember = new AssignMemberToEventUseCase(eventRepository, prisma, socketServer, createNotificationUseCase);
+const assignMember = new AssignMemberToEventUseCase(eventRepository, prisma, socketServer);
 const removeMember = new RemoveMemberFromEventUseCase(eventRepository, prisma, socketServer, createNotificationUseCase);
 
 export const eventController = new EventController(
