@@ -650,6 +650,7 @@ export default async function seedTestData() {
   // ================================================================
   console.log("→ Criando posts...");
 
+  const publishedDate = daysAgo(5);
   const postsData = [
     {
       title: "Mensagem de Domingo",
@@ -657,7 +658,7 @@ export default async function seedTestData() {
       category: "SERMON" as const,
       visibility: "PUBLIC" as const,
       authorEmail: "pastor@test.com",
-      published: true,
+      status: "PUBLISHED" as const,
     },
     {
       title: "Aniversário da Igreja",
@@ -665,7 +666,7 @@ export default async function seedTestData() {
       category: "ANNOUNCEMENT" as const,
       visibility: "PUBLIC" as const,
       authorEmail: "admin@test.com",
-      published: true,
+      status: "PUBLISHED" as const,
     },
     {
       title: "Campanha de Natal",
@@ -673,7 +674,7 @@ export default async function seedTestData() {
       category: "EVENT_NEWS" as const,
       visibility: "PUBLIC" as const,
       authorEmail: "presidente@test.com",
-      published: true,
+      status: "PUBLISHED" as const,
     },
     {
       title: "Devocional Diário",
@@ -681,7 +682,7 @@ export default async function seedTestData() {
       category: "DEVOTIONAL" as const,
       visibility: "INTERNAL" as const,
       authorEmail: "pastor@test.com",
-      published: true,
+      status: "PUBLISHED" as const,
     },
     {
       title: "Rascunho",
@@ -689,7 +690,7 @@ export default async function seedTestData() {
       category: "ANNOUNCEMENT" as const,
       visibility: "INTERNAL" as const,
       authorEmail: "admin@test.com",
-      published: false,
+      status: "DRAFT" as const,
     },
   ];
 
@@ -701,7 +702,9 @@ export default async function seedTestData() {
         content: p.content,
         category: p.category,
         visibility: p.visibility,
-        publishedAt: p.published ? daysAgo(5) : null,
+        status: p.status,
+        firstPublishedAt: p.status === "PUBLISHED" ? publishedDate : null,
+        publishedAt: p.status === "PUBLISHED" ? publishedDate : null,
         authorId: users[p.authorEmail].id,
       },
     });

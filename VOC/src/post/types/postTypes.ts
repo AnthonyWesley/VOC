@@ -15,6 +15,8 @@ export const PostCategory = {
 
 export type PostCategory = (typeof PostCategory)[keyof typeof PostCategory];
 
+export type PostStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
+
 export type CreatePostInput = {
   title: string;
   content: string;
@@ -29,10 +31,6 @@ export type PublishPostInput = {
   visibility: PostVisibility;
 };
 
-export type UnpublishPostInput = {
-  postId: string;
-};
-
 export type UpdatePostInput = {
   postId: string;
   title?: string;
@@ -42,19 +40,35 @@ export type UpdatePostInput = {
   imageUrl?: string;
 };
 
-export type ListPostOutput = {
+export type PostSummary = {
   id: string;
+  title: string;
+  content: string;
+  imageUrl: string | null;
+  category: PostCategory;
+  visibility: PostVisibility;
+  status: PostStatus;
+  authorId: string;
+  firstPublishedAt: string | null;
+  publishedAt: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
   author: {
     fullName: string | null;
     photoUrl: string | null;
     roles: { id: string; name: string }[];
   };
-  authorId: string;
-  title?: string;
-  content?: string;
-  category?: PostCategory;
-  visibility?: PostVisibility;
-  imageUrl?: string;
-  publishedAt?: string | null;
-  createdAt: string;
 };
+
+export type PostDetails = PostSummary;
+
+export type PostFormValues = {
+  title: string;
+  content: string;
+  imageUrl: string;
+  category: PostCategory;
+  visibility: PostVisibility;
+};
+
+export type ListPostOutput = PostSummary;

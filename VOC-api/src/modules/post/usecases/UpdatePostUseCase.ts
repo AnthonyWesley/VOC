@@ -28,15 +28,10 @@ export class UpdatePostUseCase {
   async execute(input: UpdatePostInput): Promise<UpdatePostOutput> {
     const { postId, title, content, category, imageUrl, visibility, authUserId } = input;
 
-    if (!postId) {
-      throw new ValidationError("MISSING_POST_ID");
-    }
+    if (!postId) throw new ValidationError("MISSING_POST_ID");
 
     const post = await this.postRepository.findById(postId);
-
-    if (!post) {
-      throw new NotFoundError("POST_NOT_FOUND");
-    }
+    if (!post) throw new NotFoundError("POST_NOT_FOUND");
 
     const isOwner = post.authorId === authUserId;
     const user = await this.userRepository.findById(authUserId);
@@ -46,17 +41,19 @@ export class UpdatePostUseCase {
       throw new ForbiddenError("NOT_POST_OWNER");
     }
 
-    post.update({
+    post.updateContent({
       title,
       content,
       category,
-      imageUrl,
+      imageUrl: imageUrl ?? undefined,
       visibility,
     });
-    await this.postRepository.save(post);
 
-    return {
-      id: post.id,
-    };
+    const updated = await this.postRepository.updateContent(post);
+    if (!updated) {
+      throw new NotFoundError("POST_NOT_FOUND");
+    }
+
+    return { id: post.id };
   }
 }

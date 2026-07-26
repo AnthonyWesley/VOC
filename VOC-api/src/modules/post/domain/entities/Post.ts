@@ -1,20 +1,28 @@
-// identity/domain/entities/Post.ts
-
-import { PostCategory, PostVisibility } from "@prisma/client";
-import { ConflictError } from "../../../../shared/errors/ConflictError";
+import { PostCategory, PostStatus, PostVisibility } from "@prisma/client";
+import { ValidationError } from "../../../../shared/errors/ValidationError";
 import { generateId } from "../../../../shared/utils/generateId";
 
 export type PostProps = {
   id: string;
   title: string;
   content: string;
-  imageUrl?: string | null;
+  imageUrl: string | null;
   category: PostCategory;
   visibility: PostVisibility;
 
+  status: PostStatus;
+
+  firstPublishedAt: Date | null;
+  publishedAt: Date | null;
+  archivedAt: Date | null;
+  deletedAt: Date | null;
+
   authorId: string;
 
-  publishedAt: Date | null;
+  publishedById: string | null;
+  archivedById: string | null;
+  deletedById: string | null;
+
   createdAt: Date;
   updatedAt: Date;
 };
@@ -28,14 +36,22 @@ export type CreatePostProps = {
   visibility: PostVisibility;
 };
 
+type ContentUpdateData = {
+  title?: string;
+  content?: string;
+  category?: PostCategory;
+  visibility?: PostVisibility;
+  imageUrl?: string | null;
+};
+
 export class Post {
   private constructor(private props: PostProps) {}
 
   public static create(data: CreatePostProps): Post {
-    if (!data.title?.trim()) throw new Error("Title is required");
-    if (!data.content?.trim()) throw new Error("Content is required");
-    if (!data.category) throw new Error("Category is required");
-    if (!data.authorId) throw new Error("AuthorId is required");
+    if (!data.title?.trim()) throw new ValidationError("MISSING_TITLE");
+    if (!data.content?.trim()) throw new ValidationError("MISSING_CONTENT");
+    if (!data.category) throw new ValidationError("MISSING_CATEGORY");
+    if (!data.authorId) throw new ValidationError("MISSING_AUTHOR_ID");
 
     const now = new Date();
 
@@ -47,7 +63,14 @@ export class Post {
       imageUrl: data.imageUrl ?? null,
       authorId: data.authorId,
       visibility: data.visibility,
-      publishedAt: data.visibility ? now : null,
+      status: "DRAFT",
+      firstPublishedAt: null,
+      publishedAt: null,
+      archivedAt: null,
+      deletedAt: null,
+      publishedById: null,
+      archivedById: null,
+      deletedById: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -57,23 +80,21 @@ export class Post {
     return new Post({ ...props });
   }
 
-  public update(data: {
-    title?: string;
-    content?: string;
-    category?: PostCategory;
-    visibility?: PostVisibility;
-    imageUrl?: string | null;
-  }): void {
+  public updateContent(data: ContentUpdateData): void {
+    if (this.props.deletedAt) {
+      throw new ValidationError("POST_IS_DELETED");
+    }
+
     let changed = false;
 
     if (data.title !== undefined) {
-      if (!data.title.trim()) throw new Error("Title cannot be empty");
+      if (!data.title.trim()) throw new ValidationError("TITLE_CANNOT_BE_EMPTY");
       this.props.title = data.title.trim();
       changed = true;
     }
 
     if (data.content !== undefined) {
-      if (!data.content.trim()) throw new Error("Content cannot be empty");
+      if (!data.content.trim()) throw new ValidationError("CONTENT_CANNOT_BE_EMPTY");
       this.props.content = data.content.trim();
       changed = true;
     }
@@ -87,6 +108,7 @@ export class Post {
       this.props.imageUrl = data.imageUrl;
       changed = true;
     }
+
     if (data.visibility !== undefined) {
       this.props.visibility = data.visibility;
       changed = true;
@@ -97,29 +119,6 @@ export class Post {
     }
   }
 
-  public publish(who: PostVisibility): void {
-    if (this.props.publishedAt) {
-      throw new ConflictError("POST_ALREADY_PUBLISHED");
-    }
-
-    this.props.visibility = who;
-    this.props.publishedAt = new Date();
-    this.props.updatedAt = new Date();
-  }
-
-  public unpublish(): void {
-    if (!this.props.visibility) {
-      throw new ConflictError("POST_ALREADY_UNPUBLISHED");
-    }
-
-    // this.props.visibility = false;
-    this.props.publishedAt = null;
-    this.props.updatedAt = new Date();
-  }
-
-  // ---------------------------
-  // GETTERS
-  // ---------------------------
   public get id(): string {
     return this.props.id;
   }
@@ -136,20 +135,48 @@ export class Post {
     return this.props.category;
   }
 
-  public get authorId(): string {
-    return this.props.authorId;
-  }
-
   public get visibility(): PostVisibility {
     return this.props.visibility;
   }
 
   public get imageUrl(): string | null {
-    return this.props.imageUrl ?? null;
+    return this.props.imageUrl;
+  }
+
+  public get status(): PostStatus {
+    return this.props.status;
+  }
+
+  public get firstPublishedAt(): Date | null {
+    return this.props.firstPublishedAt;
   }
 
   public get publishedAt(): Date | null {
     return this.props.publishedAt;
+  }
+
+  public get archivedAt(): Date | null {
+    return this.props.archivedAt;
+  }
+
+  public get deletedAt(): Date | null {
+    return this.props.deletedAt;
+  }
+
+  public get authorId(): string {
+    return this.props.authorId;
+  }
+
+  public get publishedById(): string | null {
+    return this.props.publishedById;
+  }
+
+  public get archivedById(): string | null {
+    return this.props.archivedById;
+  }
+
+  public get deletedById(): string | null {
+    return this.props.deletedById;
   }
 
   public get createdAt(): Date {

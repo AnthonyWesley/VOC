@@ -25,7 +25,10 @@ model User {
   passwordChangedAt        DateTime?
   roles         UserRole[]
   member        Member?
-  posters       Post[]
+  posters       Post[] @relation("PostAuthor")
+  publishedPosts       Post[] @relation("PostPublishedBy")
+  archivedPosts        Post[] @relation("PostArchivedBy")
+  deletedPosts         Post[] @relation("PostDeletedBy")
   recordedFinancialRecords  FinancialRecord[] @relation("FinancialRecordRecordedBy")
   cancelledFinancialRecords FinancialRecord[] @relation("FinancialRecordCancelledBy")
   reversedFinancialRecords  FinancialRecord[] @relation("FinancialRecordReversedByUser")
@@ -403,6 +406,12 @@ enum PaymentMethod {
 // COMUNICAÇÃO
 ///////////////////////////////////////////////////////
 
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 enum PostVisibility {
   PUBLIC
   INTERNAL
@@ -417,17 +426,29 @@ model Post {
   category    PostCategory
   visibility  PostVisibility @default(PUBLIC)
 
-  publishedAt DateTime?
+  status      PostStatus      @default(DRAFT)
+
+  firstPublishedAt DateTime?
+  publishedAt       DateTime?
+  archivedAt        DateTime?
+  deletedAt         DateTime?
 
   authorId    String
-  author      User            @relation(fields: [authorId], references: [id])
+  author      User            @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  publishedById String?
+  publishedBy   User? @relation("PostPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+
+  archivedById  String?
+  archivedBy    User? @relation("PostArchivedBy", fields: [archivedById], references: [id], onDelete: SetNull)
+
+  deletedById   String?
+  deletedBy     User? @relation("PostDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
 
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  @@index([visibility])
-  @@index([category])
-  @@index([publishedAt])
+  @@index([authorId, status, updatedAt, id])
 }
 
 enum PostCategory {

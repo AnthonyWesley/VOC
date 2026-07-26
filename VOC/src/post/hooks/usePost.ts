@@ -6,6 +6,7 @@ import { useMemo } from "react";
 type UseUserParams = {
   postId?: string;
   limit?: number;
+  status?: string;
 };
 
 export default function usePost(params?: UseUserParams) {
@@ -22,11 +23,11 @@ export default function usePost(params?: UseUserParams) {
   });
 
   const queryPosts = useInfiniteQuery<PaginatedPostsResponse, Error>({
-    queryKey: ["postsData", "infinite", pageLimit],
+    queryKey: ["postsData", "infinite", pageLimit, params?.status],
     queryFn: ({ pageParam }) => {
       const cursor = typeof pageParam === "string" ? pageParam : undefined;
       return isAuthenticated
-        ? postService.list({ limit: pageLimit, cursor })
+        ? postService.list({ limit: pageLimit, cursor, status: params?.status })
         : postService.listPublic({ limit: pageLimit, cursor });
     },
     initialPageParam: undefined as string | undefined,

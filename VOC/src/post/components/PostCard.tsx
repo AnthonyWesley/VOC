@@ -3,42 +3,77 @@ import useAuthStatus from "../../auth/hooks/useAuthStatus";
 import { CardActions } from "../../components/CardActions";
 import Icon from "../../components/Icon";
 import { usePostMutations } from "../hooks/usePostMutations";
-import { ListPostOutput } from "../types/postTypes";
+import { PostSummary, PostStatus } from "../types/postTypes";
 import PostForm from "./PostForm";
 import { Balloon } from "../../components/Balloon";
 import Avatar from "../../components/Avatar";
 import { LEVEL } from "../../shared/constants/levels";
 
 interface PostCardProps {
-  post: ListPostOutput;
+  post: PostSummary;
   isPostPublic?: boolean;
+  canEdit?: boolean;
+  canPublish?: boolean;
+  canArchive?: boolean;
+  canDelete?: boolean;
 }
 
-export function PostCard({ post, isPostPublic }: PostCardProps) {
+const STATUS_LABEL: Record<PostStatus, string> = {
+  DRAFT: "Rascunho",
+  PUBLISHED: "Publicado",
+  ARCHIVED: "Arquivado",
+};
+
+const STATUS_ICON: Record<PostStatus, string> = {
+  DRAFT: "mdi:file-document-outline",
+  PUBLISHED: "mdi:earth",
+  ARCHIVED: "mdi:archive-outline",
+};
+
+const STATUS_COLOR: Record<PostStatus, string> = {
+  DRAFT: "text-gray-400",
+  PUBLISHED: "text-sky-300",
+  ARCHIVED: "text-amber-400",
+};
+
+export function PostCard({
+  post,
+  isPostPublic,
+  canEdit,
+  canPublish,
+  canArchive,
+  canDelete,
+}: PostCardProps) {
   const { postId } = useParams();
   const navigate = useNavigate();
-  const { publishPost, unpublishPost } = usePostMutations();
+  const { publishPost, archivePost, deletePost } = usePostMutations();
   const { authUserId, authLevel } = useAuthStatus();
 
   const isOwner = post.authorId === authUserId;
   const isPresident = authLevel >= 100;
-  const canManage = isOwner || isPresident;
+  const canManage = canEdit ?? (isOwner || isPresident);
 
-  const handlePublishToggle = () => {
-    if (post.publishedAt) {
-      unpublishPost.mutate({ postId: post.id });
-    } else {
-      publishPost.mutate({
-        postId: post.id,
-        visibility: post.visibility ?? "PUBLIC",
-      });
+  const handlePublish = () => {
+    publishPost.mutate({
+      postId: post.id,
+      visibility: post.visibility ?? "PUBLIC",
+    });
+  };
+
+  const handleArchive = () => {
+    archivePost.mutate(post.id);
+  };
+
+  const handleDelete = () => {
+    if (window.confirm("Tem certeza que deseja remover este post?")) {
+      deletePost.mutate(post.id);
     }
   };
 
+  const isVisible = post.status === "PUBLISHED";
+
   return (
-    <div
-      className={`group card-hover relative my-8 flex w-full flex-col items-start justify-between border-b border-b-gray-500/10`}
-    >
+    <div className="group card-hover relative my-8 flex w-full flex-col items-start justify-between border-b border-b-gray-500/10">
       <section
         onClick={
           !postId
@@ -52,22 +87,17 @@ export function PostCard({ post, isPostPublic }: PostCardProps) {
       >
         <Balloon
           direction="bottom"
-          className={`${postId ? "" : "h-46"} w-full ${post.publishedAt ? "opacity-100" : "opacity-40"}`}
+          className={`${postId ? "" : "h-46"} w-full ${isVisible ? "opacity-100" : "opacity-40"}`}
         >
-          {/* Top info */}
           <div className="flex items-center gap-x-4 text-xs">
-            <span
-              className={`flex items-center gap-1 ${post?.publishedAt ? "text-sky-300" : "text-gray-300"}`}
-            >
-              <Icon
-                icon={post?.publishedAt ? "mdi:earth" : "mdi:earth-off"}
-                info={post?.publishedAt ? "Publicado" : "Não publicado"}
-              />
+            <span className={`flex items-center gap-1 ${STATUS_COLOR[post.status]}`}>
+              <Icon icon={STATUS_ICON[post.status]} info={STATUS_LABEL[post.status]} />
+              <span className="text-xs">{STATUS_LABEL[post.status]}</span>
             </span>
 
-            {post?.publishedAt && (
+            {post.publishedAt && (
               <time className="text-gray-400">
-                {new Date(post?.createdAt).toLocaleDateString("en-US", {
+                {new Date(post.publishedAt).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
                   year: "numeric",
@@ -76,46 +106,31 @@ export function PostCard({ post, isPostPublic }: PostCardProps) {
             )}
 
             <span className="relative z-10 rounded-full bg-gray-800/60 px-3 py-1.5 font-medium text-gray-300 hover:bg-gray-800">
-              {post?.category}
+              {post.category}
             </span>
-
-            {/* <span className="ml-auto flex items-center gap-1 text-gray-300">
-              <Icon icon="lsicon:view-outline" info="Visualizações" />
-              150
-            </span> */}
           </div>
-
-          {/* Title + content */}
 
           <div className="group relative grow">
             <h3 className="mt-3 text-lg font-semibold text-[var(--text-primary)] group-hover:text-gray-300">
               <span className="absolute inset-0"></span>
-              {post?.title}
+              {post.title}
             </h3>
-
-            <p
-              className={`${postId ? "" : "line-clamp-1"} mt-1.5 text-sm text-gray-400`}
-            >
-              {post?.content}
-            </p>
           </div>
         </Balloon>
       </section>
 
-      {/* Author */}
       <div
-        className={`${post.publishedAt ? "opacity-100" : "opacity-40"} relative mt-5 flex items-center gap-x-4 justify-self-end pb-2`}
+        className={`${isVisible ? "opacity-100" : "opacity-40"} relative mt-5 flex items-center gap-x-4 justify-self-end pb-2`}
       >
         <Avatar
-          name={post?.author?.fullName ?? "Author"}
-          image={post?.author?.photoUrl ?? ""}
+          name={post.author?.fullName ?? "Author"}
+          image={post.author?.photoUrl ?? ""}
           size="40"
         />
 
         <div className="flex w-full flex-col text-sm">
-          <p className="font-semibold text-[var(--text-primary)]">{post?.author?.fullName}</p>
-
-          {post?.author?.roles?.length > 0 && (
+          <p className="font-semibold text-[var(--text-primary)]">{post.author?.fullName}</p>
+          {post.author?.roles?.length > 0 && (
             <span className="text-gray-400">
               {post.author.roles.map((r) => r.name).join(" | ")}
             </span>
@@ -123,29 +138,48 @@ export function PostCard({ post, isPostPublic }: PostCardProps) {
         </div>
       </div>
 
-      {/* Actions */}
-      {!isPostPublic && (
+      {!isPostPublic && canManage && (
         <CardActions
           direction="horizontal"
           actions={[
-            ...(canManage
+            {
+              icon: "mdi:account-edit",
+              info: "Editar post",
+              modalId: `editPostModal-${post.id}`,
+              scale: 0.8,
+              content: <PostForm post={post} />,
+              minLevel: LEVEL.MINISTRY_LEADER,
+            },
+            ...(canPublish ?? (post.status === "DRAFT" || post.status === "ARCHIVED"))
               ? [
                   {
-                    icon: "mdi:account-edit",
-                    info: "Editar post",
-                    modalId: `editPostModal-${post?.id}`,
-                    scale: 0.8,
-                    content: <PostForm authorId={authUserId ?? ""} post={post} />,
-                    minLevel: LEVEL.MINISTRY_LEADER,
-                  },
-                  {
-                    icon: post?.publishedAt ? "mdi:cancel" : "mdi:publish",
-                    info: post?.publishedAt ? "Ocultar" : "Publicar",
-                    onClick: handlePublishToggle,
+                    icon: "mdi:publish",
+                    info: "Publicar",
+                    onClick: handlePublish,
                     scale: 0.8,
                   },
                 ]
-              : []),
+              : [],
+            ...(canArchive ?? post.status === "PUBLISHED")
+              ? [
+                  {
+                    icon: "mdi:archive-outline",
+                    info: "Arquivar",
+                    onClick: handleArchive,
+                    scale: 0.8,
+                  },
+                ]
+              : [],
+            ...(canDelete ?? true)
+              ? [
+                  {
+                    icon: "mdi:delete-outline",
+                    info: "Remover",
+                    onClick: handleDelete,
+                    scale: 0.8,
+                  },
+                ]
+              : [],
           ]}
         />
       )}

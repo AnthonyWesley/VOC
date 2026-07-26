@@ -4,7 +4,7 @@ import { z } from "zod";
 import { CreatePostUseCase } from "../../usecases/CreatePostUseCase";
 import { DeletePostUseCase } from "../../usecases/DeletePostUseCase";
 import { PublishPostUseCase } from "../../usecases/PublishPostUseCase";
-import { UnpublishPostUseCase } from "../../usecases/UnpublishPostUseCase";
+import { ArchivePostUseCase } from "../../usecases/ArchivePostUseCase";
 import { UpdatePostUseCase } from "../../usecases/UpdatePostUseCase";
 import { ListPostsUseCase } from "../../usecases/ListPostsUseCase";
 import { ListPublicPostsUseCase } from "../../usecases/ListPublicPostsUseCase";
@@ -17,7 +17,7 @@ export class PostController {
     private readonly updatePostUseCase: UpdatePostUseCase,
     private readonly deletePostUseCase: DeletePostUseCase,
     private readonly publishPostUseCase: PublishPostUseCase,
-    private readonly unpublishPostUseCase: UnpublishPostUseCase,
+    private readonly archivePostUseCase: ArchivePostUseCase,
     private readonly getPostUseCase: GetPostUseCase,
     private readonly listPostsUseCase: ListPostsUseCase,
     private readonly getPublicPostUseCase: GetPublicPostUseCase,
@@ -41,7 +41,6 @@ export class PostController {
 
   async update(request: Request, response: Response): Promise<Response> {
     const postId = String(request.params.postId);
-
     const result = await this.updatePostUseCase.execute({
       ...request.body,
       postId,
@@ -53,7 +52,6 @@ export class PostController {
 
   async publish(request: Request, response: Response): Promise<Response> {
     const postId = String(request.params.postId);
-
     const result = await this.publishPostUseCase.execute({
       ...request.body,
       postId,
@@ -63,9 +61,9 @@ export class PostController {
     return response.status(200).json(result);
   }
 
-  async unpublish(request: Request, response: Response): Promise<Response> {
+  async archive(request: Request, response: Response): Promise<Response> {
     const postId = String(request.params.postId);
-    const result = await this.unpublishPostUseCase.execute({
+    const result = await this.archivePostUseCase.execute({
       postId,
       authUserId: request.auth!.userId,
     });
@@ -75,7 +73,6 @@ export class PostController {
 
   async get(request: Request, response: Response): Promise<Response> {
     const postId = String(request.params.postId);
-
     const result = await this.getPostUseCase.execute({
       authUserId: request.auth!.userId,
       postId,
@@ -85,14 +82,14 @@ export class PostController {
   }
 
   async list(request: Request, response: Response): Promise<Response> {
-    const { limit = "20", cursor } = request.query;
-
+    const { limit = "20", cursor, status } = request.query;
     const parsedLimit = Math.min(Math.max(Number(limit) || 20, 1), 200);
 
     const result = await this.listPostsUseCase.execute({
       authUserId: request.auth!.userId,
       limit: parsedLimit,
       cursor: cursor ? String(cursor) : undefined,
+      status: status ? String(status) : undefined,
     });
 
     return response.status(200).json(result);
@@ -100,7 +97,6 @@ export class PostController {
 
   async getPublic(request: Request, response: Response): Promise<Response> {
     const postId = String(request.params.postId);
-
     const result = await this.getPublicPostUseCase.execute({ postId });
 
     return response.status(200).json(result);
@@ -108,7 +104,6 @@ export class PostController {
 
   async listPublic(request: Request, response: Response): Promise<Response> {
     const { limit = "20", cursor } = request.query;
-
     const parsedLimit = Math.min(Math.max(Number(limit) || 20, 1), 200);
 
     const result = await this.listPublicPostsUseCase.execute({
@@ -121,7 +116,6 @@ export class PostController {
 
   async delete(request: Request, response: Response): Promise<Response> {
     const postId = String(request.params.postId);
-
     await this.deletePostUseCase.execute({
       postId,
       authUserId: request.auth!.userId,

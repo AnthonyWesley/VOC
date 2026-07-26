@@ -2,11 +2,9 @@ import { useEffect } from "react";
 import Modal from "../../components/Modal";
 import PostForm from "../../post/components/PostForm";
 import { useModalStore } from "../../store/useModalStore";
-import useAuthStatus from "../../auth/hooks/useAuthStatus";
 import { useEventToPostStore } from "../stores/useEventToPostStore";
 
 export default function PostPromptModal() {
-  const { authUserId } = useAuthStatus();
   const { data, clear } = useEventToPostStore();
   const { openModal, closeModal } = useModalStore();
   const modalId = "postPromptModal";
@@ -39,7 +37,6 @@ export default function PostPromptModal() {
           </button>
         </div>
         <PostForm
-          authorId={authUserId ?? ""}
           initialTitle={data.title}
           initialContent={`Evento: ${data.title} (${new Date(data.startsAt).toLocaleDateString("pt-BR")})`}
         />

@@ -17,11 +17,22 @@ const CATEGORY_LABELS: Record<string, string> = {
   DEVOTIONAL: "Devocional",
 };
 
+const STATUS_OPTIONS = [
+  { label: "Todos", value: "all" },
+  { label: "Publicados", value: "PUBLISHED" },
+  { label: "Rascunhos", value: "DRAFT" },
+  { label: "Arquivados", value: "ARCHIVED" },
+];
+
 export default function PostArea({ mode }: PostAreaProps) {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [index, setIndex] = useState(0);
 
-  const { allPosts, queryPosts } = usePost({ limit: mode === "public" ? 50 : 20 });
+  const { allPosts, queryPosts } = usePost({
+    limit: mode === "public" ? 50 : 20,
+    status: mode === "public" ? undefined : statusFilter !== "all" ? statusFilter : undefined,
+  });
   const { isPending, error, isFetchingNextPage, hasNextPage, fetchNextPage } = queryPosts;
 
   if (isPending) return <Spin />;
@@ -79,7 +90,15 @@ export default function PostArea({ mode }: PostAreaProps) {
 
   return (
     <div className="mb-4 space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <FormInput
+          icon="mdi:filter-outline"
+          type="select"
+          variant="md"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          options={STATUS_OPTIONS}
+        />
         <FormInput
           icon="mdi:filter-outline"
           type="select"

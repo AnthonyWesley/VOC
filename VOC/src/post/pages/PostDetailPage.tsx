@@ -18,7 +18,6 @@ export default function PostDetailPage() {
 
   return (
     <div className="space-y-4 px-4 md:px-6">
-      {/* HEADER PREMIUM */}
       <PageHeader
         icon="mdi:rss-feed"
         title="Detalhes"
@@ -27,9 +26,16 @@ export default function PostDetailPage() {
         className="border-b border-slate-800/90 bg-none px-0 py-0 pb-4"
       />
 
-      {/* CONTEÚDO */}
       <section className="mx-auto flex w-full max-w-2xl items-start justify-center">
-        <PostCard key={post.id} post={post} isPostPublic={!isAuthenticated} />
+        <PostCard
+          key={post.id}
+          post={post}
+          isPostPublic={!isAuthenticated}
+          canEdit
+          canPublish
+          canArchive
+          canDelete
+        />
       </section>
     </div>
   );

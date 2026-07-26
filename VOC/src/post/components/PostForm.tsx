@@ -5,40 +5,41 @@ import {
   PostCategory,
   PostVisibility,
   CreatePostInput,
+  PostDetails,
 } from "../types/postTypes";
 
 import { PageHeader } from "../../components/PageHeader";
 import { FormInput } from "../../components/FormInput";
 import { FormButton } from "../../components/FormButton";
+import useAuthStatus from "../../auth/hooks/useAuthStatus";
 
 type PostFormProps = {
-  post?: any;
-  authorId: string;
+  post?: PostDetails;
   initialTitle?: string;
   initialContent?: string;
 };
 
 export default function PostForm({
   post,
-  authorId,
   initialTitle,
   initialContent,
 }: PostFormProps) {
+  const { authUserId } = useAuthStatus();
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState<PostCategory>("ANNOUNCEMENT");
   const [visibility, setVisibility] = useState<PostVisibility>("PUBLIC");
+  const [imageUrl, setImageUrl] = useState("");
 
-  const { createPost, updatePost, publishPost, unpublishPost } =
-    usePostMutations();
+  const { createPost, updatePost } = usePostMutations();
 
   useEffect(() => {
     if (!post) return;
-
     setTitle(post.title);
     setContent(post.content);
     setCategory(post.category);
     setVisibility(post.visibility);
+    setImageUrl(post.imageUrl ?? "");
   }, [post]);
 
   useEffect(() => {
@@ -52,27 +53,29 @@ export default function PostForm({
       setContent("");
       setCategory("ANNOUNCEMENT");
       setVisibility("PUBLIC");
+      setImageUrl("");
     }
   };
+
+  const mapFormToPayload = (): CreatePostInput => ({
+    title,
+    content,
+    category,
+    visibility,
+    imageUrl: imageUrl || undefined,
+    authorId: authUserId ?? "",
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const payload: CreatePostInput = {
-      title,
-      content,
-      category,
-      visibility,
-      authorId,
-    };
-
     if (post) {
       updatePost.mutate(
-        { ...payload, postId: post.id },
+        { ...mapFormToPayload(), postId: post.id },
         { onSuccess: () => clearForm() },
       );
     } else {
-      createPost.mutate(payload, { onSuccess: () => clearForm() });
+      createPost.mutate(mapFormToPayload(), { onSuccess: () => clearForm() });
     }
   };
 
@@ -80,7 +83,8 @@ export default function PostForm({
     title !== (post?.title ?? "") ||
     content !== (post?.content ?? "") ||
     category !== (post?.category ?? "") ||
-    visibility !== (post?.visibility ?? "");
+    visibility !== (post?.visibility ?? "") ||
+    imageUrl !== (post?.imageUrl ?? "");
 
   return (
     <Card className="overflow-hidden p-0">
@@ -91,7 +95,6 @@ export default function PostForm({
       />
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-6">
-        {/* VISIBILIDADE */}
         <section className="grid grid-cols-1 gap-2 lg:grid-cols-2">
           <FormInput
             label="Visibilidade"
@@ -105,7 +108,6 @@ export default function PostForm({
             }))}
           />
 
-          {/* CATEGORIA */}
           <FormInput
             label="Categoria"
             icon="mdi:tag-outline"
@@ -119,7 +121,6 @@ export default function PostForm({
           />
         </section>
 
-        {/* TÍTULO */}
         <FormInput
           label="Título"
           icon="mdi:format-title"
@@ -130,7 +131,6 @@ export default function PostForm({
           required
         />
 
-        {/* CONTEÚDO */}
         <FormInput
           label="Conteúdo"
           icon="mdi:text"
@@ -141,7 +141,15 @@ export default function PostForm({
           onChange={(e) => setContent(e.target.value)}
         />
 
-        {/* AÇÕES */}
+        <FormInput
+          label="URL da Imagem"
+          icon="mdi:image-outline"
+          type="text"
+          placeholder="https://..."
+          value={imageUrl}
+          onChange={(e) => setImageUrl(e.target.value)}
+        />
+
         <div className="mt-4 flex gap-3">
           <FormButton
             type="submit"
@@ -151,28 +159,6 @@ export default function PostForm({
             disabled={!hasChanges}
             className="flex-1"
           />
-
-          {post &&
-            (post.publishedAt ? (
-              <FormButton
-                label="Despublicar"
-                icon="mdi:eye-off-outline"
-                onClick={() => unpublishPost.mutate({ postId: post.id })}
-                className="flex-1 bg-red-600 hover:bg-red-700"
-              />
-            ) : (
-              <FormButton
-                label="Publicar"
-                icon="mdi:eye-outline"
-                onClick={() =>
-                  publishPost.mutate({
-                    postId: post.id,
-                    visibility,
-                  })
-                }
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-              />
-            ))}
         </div>
       </form>
     </Card>

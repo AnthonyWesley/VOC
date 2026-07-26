@@ -5,7 +5,6 @@ import { postService } from "../services/postService";
 import {
   CreatePostInput,
   PublishPostInput,
-  UnpublishPostInput,
   UpdatePostInput,
 } from "../types/postTypes";
 
@@ -13,66 +12,67 @@ export function usePostMutations() {
   const queryClient = useQueryClient();
   const { closeModal } = useModalStore();
 
-  // CREATE
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["postsData"] });
+    queryClient.invalidateQueries({ queryKey: ["postData"] });
+  };
+
   const createPost = useMutation({
     mutationFn: (data: CreatePostInput) => postService.create(data),
     onSuccess: () => {
       toast.success("Post criado com sucesso!");
       closeModal();
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["postsData"] });
-    },
+    onSettled: invalidate,
     onError: (err: any) => {
       toast.error(err.response?.data?.message || "Erro ao criar post");
     },
   });
 
-  // UPDATE
   const updatePost = useMutation({
     mutationFn: (data: UpdatePostInput) => postService.update(data),
     onSuccess: () => {
       toast.success("Post atualizado com sucesso!");
       closeModal();
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["postsData"] });
-      queryClient.invalidateQueries({ queryKey: ["postData"] });
-    },
+    onSettled: invalidate,
     onError: (err: any) => {
       toast.error(err.response?.data?.message || "Erro ao atualizar post");
     },
   });
 
-  // PUBLISH
   const publishPost = useMutation({
     mutationFn: (data: PublishPostInput) => postService.publish(data),
     onSuccess: () => {
       toast.success("Post publicado!");
       closeModal();
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["postsData"] });
-      queryClient.invalidateQueries({ queryKey: ["postData"] });
-    },
+    onSettled: invalidate,
     onError: (err: any) => {
       toast.error(err.response?.data?.message || "Erro ao publicar post");
     },
   });
 
-  // UNPUBLISH
-  const unpublishPost = useMutation({
-    mutationFn: (data: UnpublishPostInput) => postService.unpublish(data),
+  const archivePost = useMutation({
+    mutationFn: (postId: string) => postService.archive(postId),
     onSuccess: () => {
-      toast.success("Post despublicado!");
+      toast.success("Post arquivado!");
       closeModal();
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["postsData"] });
-      queryClient.invalidateQueries({ queryKey: ["postData"] });
-    },
+    onSettled: invalidate,
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || "Erro ao despublicar post");
+      toast.error(err.response?.data?.message || "Erro ao arquivar post");
+    },
+  });
+
+  const deletePost = useMutation({
+    mutationFn: (postId: string) => postService.delete(postId),
+    onSuccess: () => {
+      toast.success("Post removido!");
+    },
+    onSettled: invalidate,
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || "Erro ao remover post");
     },
   });
 
@@ -80,6 +80,7 @@ export function usePostMutations() {
     createPost,
     updatePost,
     publishPost,
-    unpublishPost,
+    archivePost,
+    deletePost,
   };
 }

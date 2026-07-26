@@ -78,7 +78,7 @@ export class PrismaDashboardRepository implements IDashboardRepository {
 
       // POSTS
       this.prisma.post.findMany({
-        where: { publishedAt: { not: null } },
+        where: { status: "PUBLISHED", deletedAt: null, publishedAt: { not: null } },
         include: {
           author: {
             select: {
@@ -157,7 +157,9 @@ export class PrismaDashboardRepository implements IDashboardRepository {
         category: post.category,
         imageUrl: post.imageUrl,
         visibility: post.visibility,
+        status: post.status,
         authorId: post.authorId,
+        firstPublishedAt: post.firstPublishedAt,
         publishedAt: post.publishedAt,
         createdAt: post.createdAt,
         author: {

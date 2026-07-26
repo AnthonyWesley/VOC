@@ -8,13 +8,12 @@ import { useModalStore } from "../../store/useModalStore";
 import { LEVEL } from "../../shared/constants/levels";
 
 export default function PostsPage() {
-  const { authUserId, isPending } = useAuthStatus();
+  const { isPending } = useAuthStatus();
   const { openModal } = useModalStore();
   if (isPending) return <Spin />;
 
   return (
     <div className="space-y-4 px-4 md:px-6">
-      {/* HEADER PREMIUM */}
       <PageHeader
         icon="mdi:rss-feed"
         title="Feed"
@@ -26,14 +25,12 @@ export default function PostsPage() {
         minLevel={LEVEL.MINISTRY_LEADER}
       />
 
-      {/* ÁREA DE POSTS */}
       <section className="mx-auto lg:w-lg">
         <PostArea mode="private" />
       </section>
 
-      {/* MODAL DE CRIAÇÃO */}
       <Modal id="createPostModal" className="flex" info="Registrar" scale={1.2}>
-        <PostForm authorId={authUserId ?? ""} />
+        <PostForm />
       </Modal>
     </div>
   );

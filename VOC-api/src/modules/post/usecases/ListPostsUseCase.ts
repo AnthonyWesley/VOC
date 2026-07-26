@@ -8,7 +8,9 @@ export interface ListPostsInputDTO {
   authUserId?: string | null;
   limit?: number;
   cursor?: string | null;
+  status?: string;
 }
+
 export interface ListPostsResponseDTO {
   posts: PostListItemDTO[];
   nextCursor: string | null;
@@ -27,7 +29,7 @@ export class ListPostsUseCase {
 
     if (authUserId) {
       const authUser = await this.userRepository.findById(authUserId);
-      isAdmin = authUser?.roles[0].name === "ADMIN" || false;
+      isAdmin = authUser?.highestLevel != null && authUser.highestLevel >= 100;
     }
 
     const { posts, nextCursor } = await this.postRepository.findAll({
@@ -35,26 +37,9 @@ export class ListPostsUseCase {
       isAdmin,
       limit: input.limit ?? 20,
       cursor: input.cursor ?? null,
+      status: input.status,
     });
 
-    return {
-      posts: posts.map((post) => ({
-        id: post.id,
-        title: post.title,
-        content: post.content,
-        category: post.category,
-        imageUrl: post.imageUrl,
-        visibility: post.visibility,
-        authorId: post.authorId,
-        publishedAt: post.publishedAt,
-        createdAt: post.createdAt,
-        author: {
-          fullName: post.author.fullName ?? null,
-          photoUrl: post.author.photoUrl ?? null,
-          roles: post.author.roles ?? null,
-        },
-      })),
-      nextCursor,
-    };
+    return { posts, nextCursor };
   }
 }

@@ -8,7 +8,7 @@ import { GetPublicPostUseCase } from "../../usecases/GetPublicPostUseCase";
 import { ListPostsUseCase } from "../../usecases/ListPostsUseCase";
 import { ListPublicPostsUseCase } from "../../usecases/ListPublicPostsUseCase";
 import { PublishPostUseCase } from "../../usecases/PublishPostUseCase";
-import { UnpublishPostUseCase } from "../../usecases/UnpublishPostUseCase";
+import { ArchivePostUseCase } from "../../usecases/ArchivePostUseCase";
 import { UpdatePostUseCase } from "../../usecases/UpdatePostUseCase";
 import { PostController } from "../controllers/PostController";
 
@@ -19,7 +19,7 @@ const create = new CreatePostUseCase(postRepository);
 const update = new UpdatePostUseCase(postRepository, userRepository);
 const remove = new DeletePostUseCase(postRepository, userRepository);
 const publish = new PublishPostUseCase(postRepository, userRepository);
-const unpublish = new UnpublishPostUseCase(postRepository, userRepository);
+const archive = new ArchivePostUseCase(postRepository, userRepository);
 const list = new ListPostsUseCase(postRepository, userRepository);
 const get = new GetPostUseCase(postRepository, userRepository);
 const getPublic = new GetPublicPostUseCase(postRepository);
@@ -30,7 +30,7 @@ export const postController = new PostController(
   update,
   remove,
   publish,
-  unpublish,
+  archive,
   get,
   list,
   getPublic,

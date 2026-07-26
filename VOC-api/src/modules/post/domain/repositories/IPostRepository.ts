@@ -1,5 +1,4 @@
-// identity/domain/repositories/IUserRepository.ts
-
+import { PostStatus } from "@prisma/client";
 import { Post } from "../entities/Post";
 
 export interface PostListItemDTO {
@@ -10,6 +9,8 @@ export interface PostListItemDTO {
   imageUrl: string | null;
   visibility: string;
   authorId: string;
+  status: string;
+  firstPublishedAt: Date | null;
   publishedAt: Date | null;
   createdAt: Date;
   author: {
@@ -24,6 +25,12 @@ export type PaginatedPostsResult = {
   nextCursor: string | null;
 };
 
+export type PostStateInfo = {
+  status: PostStatus;
+  deletedAt: Date | null;
+  firstPublishedAt: Date | null;
+};
+
 export interface IPostRepository {
   findById(id: string): Promise<Post | null>;
   findDetails(params: {
@@ -36,11 +43,18 @@ export interface IPostRepository {
     isAdmin: boolean;
     limit?: number;
     cursor?: string | null;
+    status?: string;
   }): Promise<PaginatedPostsResult>;
   findAllPublic(params?: {
     limit?: number;
     cursor?: string | null;
   }): Promise<PaginatedPostsResult>;
-  save(user: Post): Promise<void>;
-  delete(id: string): Promise<void>;
+  create(post: Post): Promise<void>;
+  updateContent(post: Post): Promise<boolean>;
+  publishDraft(id: string, userId: string): Promise<boolean>;
+  republishArchived(id: string, userId: string): Promise<boolean>;
+  archivePublished(id: string, userId: string): Promise<boolean>;
+  hardDeleteDraft(id: string): Promise<boolean>;
+  softDeletePost(id: string, userId: string): Promise<boolean>;
+  findStateByIdIncludingDeleted(id: string): Promise<PostStateInfo | null>;
 }
