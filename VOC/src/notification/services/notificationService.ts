@@ -7,12 +7,20 @@ export const notificationService = {
     limit?: number;
   }): Promise<{ items: NotificationDTO[]; totalCount: number }> => {
     const response = await churchApi.get("/notifications", { params });
-
     return response.data;
   },
 
-  read: async (id: string) => {
-    const response = await churchApi.patch(`/notifications/${id}/read`);
+  read: async (id: string): Promise<void> => {
+    await churchApi.patch(`/notifications/${id}/read`);
+  },
+
+  readAll: async (): Promise<{ updated: number }> => {
+    const response = await churchApi.patch("/notifications/read-all");
+    return response.data;
+  },
+
+  unreadCount: async (): Promise<{ count: number }> => {
+    const response = await churchApi.get("/notifications/unread-count");
     return response.data;
   },
 };

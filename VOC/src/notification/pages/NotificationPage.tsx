@@ -19,13 +19,12 @@ export default function NotificationPage() {
     },
   } = useNotifications();
 
-  const { markAsRead } = useNotificationMutations();
+  const { markAsRead, markAllAsRead } = useNotificationMutations();
   const { openModal } = useModalStore();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
 
-  // Responsive
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 1024);
     handler();
@@ -33,7 +32,6 @@ export default function NotificationPage() {
     return () => window.removeEventListener("resize", handler);
   }, []);
 
-  // Memoized notifications
   const notifications = useMemo(() => {
     if (!data) return [];
     return data.pages.flatMap((page) => page.items).map(mapNotificationToUI);
@@ -47,7 +45,6 @@ export default function NotificationPage() {
   const handleSelect = (id: string) => {
     setSelectedId(id);
     markAsRead.mutate(id);
-
     if (isMobile) {
       openModal("notification-view");
     }
@@ -68,14 +65,26 @@ export default function NotificationPage() {
 
   return (
     <div className="flex w-full flex-1 flex-col lg:flex-row">
-      <NotificationList
-        notifications={notifications}
-        onSelect={handleSelect}
-        fetchNextPage={fetchNextPage}
-        hasNextPage={hasNextPage}
-        isFetchingNextPage={isFetchingNextPage}
-        selectedId={selectedId}
-      />
+      <div className="flex w-full flex-col lg:w-1/3">
+        <div className="flex items-center justify-between px-4 pt-4">
+          <h2 className="text-lg font-bold">Caixa de Entrada</h2>
+          <button
+            onClick={() => markAllAsRead.mutate()}
+            disabled={markAllAsRead.isPending}
+            className="btn btn-ghost btn-xs"
+          >
+            Marcar todas como lidas
+          </button>
+        </div>
+        <NotificationList
+          notifications={notifications}
+          onSelect={handleSelect}
+          fetchNextPage={fetchNextPage}
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+          selectedId={selectedId}
+        />
+      </div>
 
       {!isMobile && <NotificationContent notification={selectedNotification} />}
 

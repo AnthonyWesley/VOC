@@ -4,6 +4,7 @@ import { ValidationError } from "../../../shared/errors/ValidationError";
 import { ConflictError } from "../../../shared/errors/ConflictError";
 import { ForbiddenError } from "../../../shared/errors/ForbiddenError";
 import { ISocketServer } from "../../../infra/socket/ISocketServer";
+import { CreateNotificationUseCase } from "../../notification/usecases/CreateNotificationUseCase";
 
 export type AssignMemberToEventInput = {
   eventId: string;
@@ -20,6 +21,7 @@ export class AssignMemberToEventUseCase {
     private readonly repo: IEventRepository,
     private readonly prisma: PrismaClient,
     private readonly socketServer?: ISocketServer,
+    private readonly createNotification?: CreateNotificationUseCase,
   ) {}
 
   async execute(input: AssignMemberToEventInput): Promise<AssignMemberToEventOutput> {
@@ -27,7 +29,6 @@ export class AssignMemberToEventUseCase {
     if (!eventId) throw new ValidationError("MISSING_EVENT_ID");
     if (!memberId) throw new ValidationError("MISSING_MEMBER_ID");
 
-    // Batch load needed data upfront
     const [event, member, user, ministry] = await Promise.all([
       this.prisma.event.findUnique({ where: { id: eventId }, select: { id: true, title: true, type: true, startsAt: true, status: true } }),
       this.prisma.member.findUnique({ where: { id: memberId }, select: { id: true, fullName: true, userId: true, phone: true } }),
@@ -57,24 +58,28 @@ export class AssignMemberToEventUseCase {
         throw error;
       }
 
-      // Notification inside transaction (only if user has an account)
       if (memberUserId) {
-        await this.prisma.notification.create({
-          data: {
-            userId: memberUserId,
-            type: "MEMBRO_ESCALADO",
-            title: "Você foi escalado!",
-            message: `Você foi escalado para ${ministry.name} no evento ${event.title ?? event.type} em ${event.startsAt.toLocaleDateString("pt-BR")}.`,
-            payload: JSON.stringify({ eventId, ministryId, ministryName: ministry.name, eventTitle: event.title, eventDate: event.startsAt.toISOString() }),
+        const assignmentId = await this.repo.findAssignment(eventId, memberId, ministryId).then(a => a?.id);
+        const result = await this.createNotification?.execute({
+          userId: memberUserId,
+          type: "MEMBRO_ESCALADO",
+          title: "Você foi escalado!",
+          message: `Você foi escalado para ${ministry.name} no evento ${event.title ?? event.type} em ${event.startsAt.toLocaleDateString("pt-BR")}.`,
+          payload: {
+            eventId,
+            ministryId,
+            ministryName: ministry.name,
+            eventTitle: event.title ?? "",
+            eventDate: event.startsAt.toISOString(),
           },
-        }).catch(() => {});
-      }
-
-      // Socket after commit (best-effort)
-      if (memberUserId) {
-        setImmediate(() => {
-          this.socketServer?.emitToUser(memberUserId, "notification", { type: "MEMBRO_ESCALADO", eventId });
+          deduplicationKey: assignmentId ? `v1:membro-escalado:${assignmentId}` : undefined,
         });
+
+        if (result?.created) {
+          setImmediate(() => {
+            this.socketServer?.emitToUser(memberUserId, "notification", { type: "MEMBRO_ESCALADO", eventId });
+          });
+        }
       }
     } else {
       try {

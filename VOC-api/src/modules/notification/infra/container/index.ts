@@ -7,12 +7,13 @@ import { NotificationController } from "../controllers/NotificationController";
 
 const notificationRepository = new PrismaNotificationRepository(prisma);
 const listNotificationsUseCase = new ListNotificationsUseCase(notificationRepository);
-const markAsReadUseCase = new MarkAsReadUseCase(prisma);
+const markAsReadUseCase = new MarkAsReadUseCase(notificationRepository);
 const createNotificationUseCase = new CreateNotificationUseCase(notificationRepository);
 
 const notificationController = new NotificationController(
   listNotificationsUseCase,
   markAsReadUseCase,
+  notificationRepository,
 );
 
 export {

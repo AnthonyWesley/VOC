@@ -147,33 +147,25 @@ export class CloseEventWithSummaryUseCase {
     await this.repo.saveWithAttendanceAndFinancial(event, attendance, financialRecords);
 
     if (isNew) {
-      await this._notifyEventCreated(event);
+      const label = this._eventTypeLabel(event.type);
+      const admins = await this.prisma.user.findMany({
+        where: { isActive: true, roles: { some: { role: { level: { gte: 80 } } } } },
+        select: { id: true },
+      });
+      for (const admin of admins) {
+        const result = await this.createNotification?.execute({
+          userId: admin.id, type: "EVENTO_CRIADO",
+          title: `Novo evento: ${event.title ?? label}`,
+          message: `${label} criado para ${event.startsAt.toLocaleDateString("pt-BR")}.${event.needsScale ? " Precisa de escala!" : ""}`,
+          payload: { eventId: event.id, eventTitle: event.title ?? "", eventType: event.type, needsScale: event.needsScale },
+          deduplicationKey: `v1:evento-criado:${event.id}`,
+        });
+        if (result?.created) {
+          this.socketServer?.emitToUser(admin.id, "notification", { type: "EVENTO_CRIADO", eventId: event.id });
+        }
+      }
     }
     return { id: event.id };
-  }
-
-  private async _notifyEventCreated(event: Event) {
-    const label = this._eventTypeLabel(event.type);
-    const admins = await this.prisma.user.findMany({
-      where: { isActive: true, roles: { some: { role: { level: { gte: 80 } } } } },
-      select: { id: true },
-    });
-    for (const admin of admins) {
-      await this.createNotification?.execute({
-        userId: admin.id, type: "EVENTO_CRIADO",
-        title: `Novo evento: ${event.title ?? label}`,
-        message: `${label} criado para ${event.startsAt.toLocaleDateString("pt-BR")}.${event.needsScale ? " Precisa de escala!" : ""}`,
-        payload: { eventId: event.id, eventTitle: event.title, eventType: event.type, needsScale: event.needsScale },
-      });
-      this.socketServer?.emitToUser(admin.id, "notification", { type: "EVENTO_CRIADO", eventId: event.id });
-    }
-    if (event.needsScale) {
-      await this._notifyMinistryLeaders(event);
-    }
-  }
-
-  private async _notifyMinistryLeaders(event: Event) {
-    // Notification logic preserved but outside transaction scope
   }
 
   private _eventTypeLabel(type: EventType): string {

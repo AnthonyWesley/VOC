@@ -5,12 +5,6 @@ export type EventoCriadoPayload = {
   needsScale: boolean;
 };
 
-export type EscalaPendentePayload = {
-  eventId: string;
-  eventTitle: string;
-  eventType: string;
-};
-
 export type MembroEscaladoPayload = {
   eventId: string;
   ministryId: string;
@@ -32,4 +26,9 @@ export type MembroRemovidoPayload = {
   ministryName: string;
   eventTitle: string;
   eventDate: string;
+};
+
+export type MembroVinculadoPayload = {
+  memberId: string;
+  memberName: string;
 };

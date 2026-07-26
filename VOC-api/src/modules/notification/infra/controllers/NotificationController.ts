@@ -1,11 +1,13 @@
 import { Request, Response } from "express";
 import { ListNotificationsUseCase } from "../../usecases/ListNotificationsUseCase";
 import { MarkAsReadUseCase } from "../../usecases/MarkAsReadUseCase";
+import { INotificationRepository } from "../../domain/repositories/INotificationRepository";
 
 export class NotificationController {
   constructor(
     private readonly listNotificationsUseCase: ListNotificationsUseCase,
     private readonly markAsReadUseCase: MarkAsReadUseCase,
+    private readonly notificationRepo: INotificationRepository,
   ) {}
 
   async list(request: Request, response: Response): Promise<Response> {
@@ -28,5 +30,21 @@ export class NotificationController {
     await this.markAsReadUseCase.execute({ notificationId, userId });
 
     return response.status(200).json({ message: "Notification marked as read" });
+  }
+
+  async markAllAsRead(request: Request, response: Response): Promise<Response> {
+    const userId = request.auth!.userId;
+
+    const result = await this.markAsReadUseCase.markAllAsRead({ userId });
+
+    return response.status(200).json(result);
+  }
+
+  async unreadCount(request: Request, response: Response): Promise<Response> {
+    const userId = request.auth!.userId;
+
+    const count = await this.notificationRepo.countUnread(userId);
+
+    return response.status(200).json({ count });
   }
 }

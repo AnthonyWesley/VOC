@@ -17,7 +17,20 @@ export function useNotificationMutations() {
     },
   });
 
+  const markAllAsRead = useMutation({
+    mutationFn: () => notificationService.readAll(),
+    onError: (err: any) =>
+      toast.error(
+        err.response?.data?.error || "Erro ao marcar notificações como lidas",
+      ),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["userData"] });
+      queryClient.invalidateQueries({ queryKey: ["notificationsData"] });
+    },
+  });
+
   return {
     markAsRead,
+    markAllAsRead,
   };
 }

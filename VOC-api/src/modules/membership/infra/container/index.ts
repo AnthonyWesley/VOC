@@ -7,14 +7,11 @@ import { ListMembersUseCase } from "../../usecases/ListMembersUseCase";
 import { UpdateMemberUseCase } from "../../usecases/UpdateMemberUseCase";
 import { MemberController } from "../controllers/MemberController";
 import { whatsAppService } from "../../../../infra/whatsapp/whatsappContainer";
-import { PrismaNotificationRepository } from "../../../notification/domain/repositories/PrismaNotificationRepository";
-import { CreateNotificationUseCase } from "../../../notification/usecases/CreateNotificationUseCase";
+import { createNotificationUseCase } from "../../../notification/infra/container";
 
 const memberRepository = new PrismaMemberRepository(prisma);
-const notificationRepository = new PrismaNotificationRepository(prisma);
-const createNotification = new CreateNotificationUseCase(notificationRepository);
 
-const create = new CreateMemberUseCase(memberRepository, whatsAppService, createNotification);
+const create = new CreateMemberUseCase(memberRepository, whatsAppService, createNotificationUseCase);
 const update = new UpdateMemberUseCase(memberRepository);
 const get = new GetMemberDetailedUseCase(memberRepository);
 const list = new ListMembersUseCase(memberRepository);

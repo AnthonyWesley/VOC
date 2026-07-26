@@ -66,6 +66,8 @@ export class NotifyInactiveMembersUseCase {
         },
       });
 
+      const thirtyDaysAgo = new Date(Date.now() - INACTIVE_MS);
+
       for (const member of inactiveMembers) {
         const lastEvent = member.events[0]?.event.startsAt;
         const daysSince = lastEvent
@@ -73,13 +75,19 @@ export class NotifyInactiveMembersUseCase {
           : 999;
 
         for (const admin of adminUsers) {
-          const alreadyNotified = await this.notificationRepo.existsByTypeAndUserId(
-            "MEMBER_AUSENTE",
-            admin.id,
-            member.id,
-          );
+          const recentCount = await this.prisma.notification.count({
+            where: {
+              userId: admin.id,
+              type: "MEMBER_AUSENTE",
+              createdAt: { gte: thirtyDaysAgo },
+              payload: {
+                path: ["memberId"],
+                equals: member.id,
+              },
+            },
+          });
 
-          if (!alreadyNotified) {
+          if (recentCount === 0) {
             await this.createNotification.execute({
               userId: admin.id,
               type: "MEMBER_AUSENTE",
@@ -98,7 +106,7 @@ export class NotifyInactiveMembersUseCase {
         if (member.phone) {
           await this.whatsApp?.sendMessage(
             member.phone,
-            `Oi ${member.fullName}! 💛 Sentimos sua falta nos nossos encontros. Já fazem ${daysSince} dias desde sua última participação, e queremos muito te ver novamente. Sua presença faz diferença na nossa comunidade!`,
+            `Oi ${member.fullName}! Sentimos sua falta nos nossos encontros. Já fazem ${daysSince} dias desde sua última participação, e queremos muito te ver novamente. Sua presença faz diferença na nossa comunidade!`,
             "default",
           ).catch(() => {});
         }

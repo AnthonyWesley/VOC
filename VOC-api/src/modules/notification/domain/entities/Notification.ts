@@ -1,12 +1,27 @@
-export type NotificationType = "MEMBER_AUSENTE" | "MEMBRO_VINCULADO" | "MEMBRO_REMOVIDO" | "EVENTO_CRIADO" | "ESCALA_PENDENTE" | "MEMBRO_ESCALADO";
+import { NotificationType } from "@prisma/client";
+
+export type { NotificationType };
+
+export type NotificationDTO = {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string | null;
+  payload: Record<string, unknown> | null;
+  payloadVersion: number;
+  readAt: string | null;
+  createdAt: string;
+};
 
 export type NotificationProps = {
   id: string;
   userId: string;
   type: NotificationType;
   title: string;
-  message?: string;
-  payload?: string;
+  message?: string | null;
+  payload?: Record<string, unknown> | null;
+  payloadVersion: number;
+  deduplicationKey?: string | null;
   readAt?: Date | null;
   createdAt: Date;
 };
@@ -20,6 +35,8 @@ export class Notification {
   get title() { return this.props.title; }
   get message() { return this.props.message ?? null; }
   get payload() { return this.props.payload ?? null; }
+  get payloadVersion() { return this.props.payloadVersion; }
+  get deduplicationKey() { return this.props.deduplicationKey ?? null; }
   get readAt() { return this.props.readAt ?? null; }
   get createdAt() { return this.props.createdAt; }
 
@@ -31,7 +48,16 @@ export class Notification {
     return !!this.props.readAt;
   }
 
-  toJSON() {
-    return { ...this.props };
+  toDTO(): NotificationDTO {
+    return {
+      id: this.props.id,
+      type: this.props.type,
+      title: this.props.title,
+      message: this.props.message ?? null,
+      payload: this.props.payload ?? null,
+      payloadVersion: this.props.payloadVersion,
+      readAt: this.props.readAt?.toISOString() ?? null,
+      createdAt: this.props.createdAt.toISOString(),
+    };
   }
 }

@@ -1,39 +1,52 @@
-import { PrismaClient } from "@prisma/client";
-import { Notification, NotificationType } from "../entities/Notification";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { Notification } from "../entities/Notification";
 import { INotificationRepository, ListNotificationsParams, PaginatedNotifications } from "./INotificationRepository";
 
-function toDomain(raw: any): Notification {
-  return new Notification({ ...raw, type: raw.type as NotificationType });
+function toDomain(raw: Prisma.NotificationGetPayload<{}>): Notification {
+  return new Notification({
+    id: raw.id,
+    userId: raw.userId,
+    type: raw.type,
+    title: raw.title,
+    message: raw.message,
+    payload: (raw.payload as Record<string, unknown>) ?? undefined,
+    payloadVersion: raw.payloadVersion,
+    deduplicationKey: raw.deduplicationKey,
+    readAt: raw.readAt,
+    createdAt: raw.createdAt,
+  });
 }
 
 export class PrismaNotificationRepository implements INotificationRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async save(notification: Notification): Promise<void> {
-    const data = notification.toJSON();
-    await this.prisma.notification.upsert({
-      where: { id: data.id },
-      update: {
-        readAt: data.readAt,
-        title: data.title,
-        message: data.message,
-        payload: data.payload,
-      },
-      create: {
-        id: data.id,
-        userId: data.userId,
-        type: data.type,
-        title: data.title,
-        message: data.message,
-        payload: data.payload,
-        readAt: data.readAt,
-        createdAt: data.createdAt,
+  async create(notification: Notification): Promise<void> {
+    await this.prisma.notification.create({
+      data: {
+        id: notification.id,
+        userId: notification.userId,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+        payload: notification.payload as Prisma.InputJsonValue,
+        payloadVersion: notification.payloadVersion,
+        deduplicationKey: notification.deduplicationKey,
+        readAt: notification.readAt,
+        createdAt: notification.createdAt,
       },
     });
   }
 
   async findById(id: string): Promise<Notification | null> {
     const data = await this.prisma.notification.findUnique({ where: { id } });
+    if (!data) return null;
+    return toDomain(data);
+  }
+
+  async findByDedupKey(userId: string, deduplicationKey: string): Promise<Notification | null> {
+    const data = await this.prisma.notification.findUnique({
+      where: { userId_deduplicationKey: { userId, deduplicationKey } },
+    });
     if (!data) return null;
     return toDomain(data);
   }
@@ -52,20 +65,29 @@ export class PrismaNotificationRepository implements INotificationRepository {
     ]);
 
     return {
-      items: items.map((n) => toDomain(n)),
+      items: items.map((n) => toDomain(n as any)),
       totalCount,
     };
   }
 
-  async existsByTypeAndUserId(type: string, userId: string, memberId: string): Promise<boolean> {
-    const count = await this.prisma.notification.count({
-      where: {
-        type,
-        userId,
-        payload: { contains: memberId },
-        createdAt: { gte: new Date(Date.now() - 30 * 86_400_000) },
-      },
+  async markAsRead(notificationId: string, userId: string): Promise<void> {
+    await this.prisma.notification.updateMany({
+      where: { id: notificationId, userId, readAt: null },
+      data: { readAt: new Date() },
     });
-    return count > 0;
+  }
+
+  async markAllAsRead(userId: string, readAt: Date): Promise<number> {
+    const result = await this.prisma.notification.updateMany({
+      where: { userId, readAt: null },
+      data: { readAt },
+    });
+    return result.count;
+  }
+
+  async countUnread(userId: string): Promise<number> {
+    return this.prisma.notification.count({
+      where: { userId, readAt: null },
+    });
   }
 }

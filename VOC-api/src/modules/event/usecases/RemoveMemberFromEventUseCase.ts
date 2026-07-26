@@ -69,7 +69,7 @@ export class RemoveMemberFromEventUseCase {
 
       await this.eventRepository.removeAssignment(assignmentId);
       const ministryId = assignment?.ministryId;
-      await this._notifyMemberRemoved(eventId, memberId, ministryId);
+      await this._notifyMemberRemoved(eventId, memberId, ministryId, assignmentId);
     } else {
       await this.eventRepository.removeMember(eventId, memberId);
     }
@@ -83,6 +83,7 @@ export class RemoveMemberFromEventUseCase {
     eventId: string,
     memberId: string,
     ministryId?: string,
+    assignmentId?: string,
   ) {
     const [event, member, ministry] = await Promise.all([
       this.prisma.event.findUnique({
@@ -108,7 +109,7 @@ export class RemoveMemberFromEventUseCase {
     const ministryName = ministry?.name ?? "ministério";
 
     if (member.userId) {
-      await this.createNotification?.execute({
+      const result = await this.createNotification?.execute({
         userId: member.userId,
         type: "MEMBRO_REMOVIDO",
         title: `Removido da escala`,
@@ -117,14 +118,17 @@ export class RemoveMemberFromEventUseCase {
           eventId,
           memberId,
           ministryName,
-          eventTitle: event.title,
+          eventTitle: event.title ?? "",
           eventDate: dateStr,
         },
+        deduplicationKey: assignmentId ? `v1:membro-removido:${assignmentId}` : undefined,
       });
-      this.socketServer?.emitToUser(member.userId, "notification", {
-        type: "MEMBRO_REMOVIDO",
-        eventId,
-      });
+      if (result?.created) {
+        this.socketServer?.emitToUser(member.userId, "notification", {
+          type: "MEMBRO_REMOVIDO",
+          eventId,
+        });
+      }
     }
 
     if (member.phone) {

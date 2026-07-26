@@ -40,9 +40,7 @@ export default function NotificationList({
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
-    <aside className="h-full w-full space-y-2 border-r border-slate-700 p-4 lg:w-1/3">
-      <h2 className="mb-4 text-lg font-bold">Caixa de Entrada</h2>
-
+    <aside className="h-full w-full space-y-2 border-r border-slate-700 p-4">
       <section
         ref={listRef}
         className="h-[80vh] overflow-y-auto border border-gray-500/15"

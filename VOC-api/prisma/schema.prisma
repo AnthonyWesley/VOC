@@ -58,18 +58,29 @@ model RefreshToken {
   @@index([userId])
 }
 
+enum NotificationType {
+  MEMBER_AUSENTE
+  MEMBRO_VINCULADO
+  MEMBRO_REMOVIDO
+  EVENTO_CRIADO
+  MEMBRO_ESCALADO
+}
+
 model Notification {
-  id        String   @id @default(uuid())
-  userId    String
-  type      String
-  title     String
-  message   String?
-  payload   String?
-  readAt    DateTime?
-  createdAt DateTime @default(now())
+  id               String           @id @default(uuid())
+  userId           String
+  type             NotificationType
+  title            String
+  message          String?
+  payload          Json?
+  payloadVersion   Int              @default(1)
+  deduplicationKey String?
+  readAt           DateTime?
+  createdAt        DateTime         @default(now())
 
-  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, deduplicationKey])
   @@index([userId, readAt])
   @@index([userId, createdAt])
 }

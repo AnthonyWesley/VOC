@@ -12,8 +12,11 @@ export type ListNotificationsParams = {
 };
 
 export interface INotificationRepository {
-  save(notification: Notification): Promise<void>;
+  create(notification: Notification): Promise<void>;
   findById(id: string): Promise<Notification | null>;
+  findByDedupKey(userId: string, deduplicationKey: string): Promise<Notification | null>;
   list(params: ListNotificationsParams): Promise<PaginatedNotifications>;
-  existsByTypeAndUserId(type: string, userId: string, memberId: string): Promise<boolean>;
+  markAsRead(notificationId: string, userId: string): Promise<void>;
+  markAllAsRead(userId: string, readAt: Date): Promise<number>;
+  countUnread(userId: string): Promise<number>;
 }

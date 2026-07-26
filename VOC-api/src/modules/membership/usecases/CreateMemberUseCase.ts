@@ -85,7 +85,6 @@ export class CreateMemberUseCase {
       ).catch(() => {});
     }
 
-    // Se veio de um usuário logado, cria notificação in-app de boas-vindas
     if (userId && this.createNotification) {
       await this.createNotification.execute({
         userId,
@@ -93,7 +92,8 @@ export class CreateMemberUseCase {
         title: "Bem-vindo à igreja!",
         message: `Seu cadastro como membro foi concluído. Seja bem-vindo(a), ${member.fullName}!`,
         payload: { memberId: member.id, memberName: member.fullName },
-      }).catch(() => {});
+        deduplicationKey: `v1:membro-vinculado:${member.id}`,
+      });
     }
 
     return { id: member.id };

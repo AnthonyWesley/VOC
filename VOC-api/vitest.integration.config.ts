@@ -4,6 +4,8 @@ export default defineConfig({
   test: {
     include: [
       "src/modules/financialRecord/__tests__/integration/**/*.test.ts",
+      "src/modules/post/__tests__/integration/**/*.test.ts",
+      "src/modules/notification/__tests__/integration/**/*.test.ts",
     ],
     fileParallelism: false,
     maxWorkers: 1,

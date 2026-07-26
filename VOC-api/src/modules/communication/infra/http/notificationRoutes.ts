@@ -10,6 +10,8 @@ const jwtProvider = new JwtProvider();
 const auth = makeAuthMiddleware(jwtProvider);
 
 router.get("/", auth, requireLevel(LEVEL.MEMBER), (req, res) => notificationController.list(req, res));
+router.get("/unread-count", auth, requireLevel(LEVEL.MEMBER), (req, res) => notificationController.unreadCount(req, res));
+router.patch("/read-all", auth, requireLevel(LEVEL.MEMBER), (req, res) => notificationController.markAllAsRead(req, res));
 router.patch("/:notificationId/read", auth, requireLevel(LEVEL.MEMBER), (req, res) => notificationController.markAsRead(req, res));
 
 export { router as notificationRoutes };

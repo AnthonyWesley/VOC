@@ -5,6 +5,7 @@ import { fieldFormatter } from "../helpers/fieldFormatter";
 import Avatar from "./Avatar";
 import Icon from "./Icon";
 import { ThemeToggle } from "../theme/ThemeProvider";
+import { useUnreadCount } from "../notification/hooks/useUnreadCount";
 
 export type RouteType = {
   href: string;
@@ -45,10 +46,11 @@ export default function Navbar() {
           <div className="dropdown dropdown-end">
             <div
               role="button"
-              className="btn btn-ghost btn-circle"
+              className="btn btn-ghost btn-circle relative"
               onClick={() => navigate("/app/notifications")}
             >
               <Icon icon="material-symbols:notifications-active" />
+              <UnreadBadge />
             </div>
           </div>
           <div className="dropdown dropdown-end">
@@ -97,5 +99,15 @@ export default function Navbar() {
         </div>
       )}
     </div>
+  );
+}
+
+function UnreadBadge() {
+  const { data: count } = useUnreadCount();
+  if (!count || count <= 0) return null;
+  return (
+    <span className="badge badge-error badge-xs absolute -top-1 -right-1 size-4 p-0 text-[10px] leading-none">
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }

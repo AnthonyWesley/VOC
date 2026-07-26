@@ -1,24 +1,24 @@
-import { PrismaClient } from "@prisma/client";
-import { NotFoundError } from "../../../shared/errors/NotFoundError";
+import { INotificationRepository } from "../domain/repositories/INotificationRepository";
 
 export type MarkAsReadInput = {
   notificationId: string;
   userId: string;
 };
 
+export type MarkAllAsReadInput = {
+  userId: string;
+};
+
 export class MarkAsReadUseCase {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly notificationRepo: INotificationRepository) {}
 
   async execute(input: MarkAsReadInput): Promise<void> {
-    if (!input.notificationId) throw new NotFoundError("NOTIFICATION_NOT_FOUND");
+    if (!input.notificationId) return;
+    await this.notificationRepo.markAsRead(input.notificationId, input.userId);
+  }
 
-    await this.prisma.notification.updateMany({
-      where: {
-        id: input.notificationId,
-        userId: input.userId,
-        readAt: null,
-      },
-      data: { readAt: new Date() },
-    });
+  async markAllAsRead(input: MarkAllAsReadInput): Promise<{ updated: number }> {
+    const count = await this.notificationRepo.markAllAsRead(input.userId, new Date());
+    return { updated: count };
   }
 }
