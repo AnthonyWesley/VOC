@@ -5,6 +5,7 @@ import { DetailedEventDTO } from "../../usecases/GetEventDetailedUseCase";
 import { Event } from "../entities/Event";
 import { EventAttendance } from "../entities/EventAttendance";
 import { FinancialRecord } from "../../../financialRecord/domain/entities/FinancialRecord";
+import { EventCursor } from "../utils/eventCursor";
 
 export type MarkAsFinishedInput = {
   id: string;
@@ -25,13 +26,13 @@ export interface IEventRepository {
   findMemberAttendance(eventId: string, memberId: string): Promise<{ eventId: string; memberId: string } | null>;
   findAll(params: {
     limit: number;
-    cursor?: string | null;
+    cursor?: EventCursor;
     type?: EventType | null;
     month?: number;
     year?: number;
   }): Promise<{
     events: Event[];
-    nextCursor: string | null;
+    nextCursor: EventCursor | null;
   }>;
   getMonthlyReport(params: {
     month: number;

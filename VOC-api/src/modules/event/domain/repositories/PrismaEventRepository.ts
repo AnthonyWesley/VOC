@@ -11,8 +11,8 @@ import { EventAttendance } from "../entities/EventAttendance";
 import { FinancialRecord } from "../../../financialRecord/domain/entities/FinancialRecord";
 import { IEventRepository, MarkAsCancelledInput, MarkAsFinishedInput } from "./IEventRepository";
 import { DetailedEventDTO } from "../../usecases/GetEventDetailedUseCase";
-import { ListEventsInput } from "../../usecases/ListEventsUseCase";
 import { buildMonthRangeUtc } from "../../../../shared/utils/timezone";
+import { EventCursor } from "../utils/eventCursor";
 
 export class PrismaEventRepository implements IEventRepository {
   private _timezone: string | null = null;
@@ -226,6 +226,7 @@ export class PrismaEventRepository implements IEventRepository {
       type: data.type,
       status: data.status as EventStatus,
       startsAt: data.startsAt,
+      endsAt: data.endsAt,
       preacherId: data.preacherId,
       attendanceMode: data.attendanceMode as AttendanceMode,
       needsScale: data.needsScale,
@@ -355,9 +356,15 @@ export class PrismaEventRepository implements IEventRepository {
     };
   }
 
-  async findAll(params: ListEventsInput): Promise<{
+  async findAll(params: {
+    limit: number;
+    cursor?: EventCursor;
+    type?: EventType | null;
+    month?: number;
+    year?: number;
+  }): Promise<{
     events: Event[];
-    nextCursor: string | null;
+    nextCursor: EventCursor | null;
   }> {
     const { limit, cursor, type, month, year } = params;
     const range = await this.buildMonthRangeTz(year ?? new Date().getFullYear(), month ?? new Date().getMonth() + 1);
@@ -369,23 +376,18 @@ export class PrismaEventRepository implements IEventRepository {
 
     if (type) where.type = type;
 
-    // Composite cursor parsing
     let cursorCondition: Prisma.EventWhereInput | undefined;
     if (cursor) {
-      try {
-        const decoded = JSON.parse(Buffer.from(cursor, "base64url").toString());
-        cursorCondition = {
-          OR: [
-            { startsAt: { lt: new Date(decoded.startsAt) } },
-            {
-              startsAt: new Date(decoded.startsAt),
-              id: { lt: decoded.id },
-            },
-          ],
-        };
-      } catch {
-        cursorCondition = { id: { lt: cursor } };
-      }
+      const cursorStartsAt = new Date(cursor.startsAt);
+      cursorCondition = {
+        OR: [
+          { startsAt: { lt: cursorStartsAt } },
+          {
+            startsAt: cursorStartsAt,
+            id: { lt: cursor.id },
+          },
+        ],
+      };
     }
 
     const data = await this.prisma.event.findMany({
@@ -394,10 +396,10 @@ export class PrismaEventRepository implements IEventRepository {
       orderBy: [{ startsAt: "desc" }, { id: "desc" }],
     });
 
-    let nextCursor: string | null = null;
+    let nextCursor: EventCursor | null = null;
     if (data.length > limit) {
       const nextItem = data.pop()!;
-      nextCursor = Buffer.from(JSON.stringify({ startsAt: nextItem.startsAt.toISOString(), id: nextItem.id })).toString("base64url");
+      nextCursor = { startsAt: nextItem.startsAt.toISOString(), id: nextItem.id };
     }
 
     const events = data.map((item) =>
@@ -432,8 +434,10 @@ export class PrismaEventRepository implements IEventRepository {
         id: event.id,
         title: event.title,
         type: event.type,
+        status: event.status,
         attendanceMode: event.attendanceMode,
         startsAt: event.startsAt,
+        endsAt: event.endsAt,
         needsScale: event.needsScale,
         preacherId: event.preacherId,
         theme: event.theme,
@@ -469,7 +473,7 @@ export class PrismaEventRepository implements IEventRepository {
   async markAsFinishedIfScheduled(input: MarkAsFinishedInput): Promise<boolean> {
     const result = await this.prisma.event.updateMany({
       where: { id: input.id, endsAt: null, deletedAt: null },
-      data: { endsAt: input.endsAt },
+      data: { endsAt: input.endsAt, status: "FINISHED" },
     });
     return result.count === 1;
   }
@@ -585,8 +589,8 @@ export class PrismaEventRepository implements IEventRepository {
   }
 
   async removeMember(eventId: string, memberId: string): Promise<void> {
-    await this.prisma.eventMember.delete({
-      where: { eventId_memberId: { eventId, memberId } },
+    await this.prisma.eventMember.deleteMany({
+      where: { eventId, memberId },
     });
   }
 

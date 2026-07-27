@@ -11,6 +11,7 @@ import { AssignMemberToEventUseCase } from "../../usecases/AssignMemberToEventUs
 import { RemoveMemberFromEventUseCase } from "../../usecases/RemoveMemberFromEventUseCase";
 import { GetMonthlyEventReportUseCase } from "../../usecases/GetMonthlyEventReportUseCase";
 import { EventType } from "@prisma/client";
+import { listEventsHttpSchema } from "../../domain/validation/eventQuerySchemas";
 
 export class EventController {
   constructor(
@@ -57,7 +58,6 @@ export class EventController {
     });
     const parsed = schema.parse(request.body);
     const input = {
-      ...parsed,
       event: {
         ...parsed.event,
         startsAt: new Date(parsed.event.startsAt),
@@ -65,6 +65,7 @@ export class EventController {
         attendanceMode: "SUMMARY" as const,
         createdById: request.auth!.userId,
       },
+      attendance: parsed.attendance,
       financialRecords: parsed.financialRecords?.map((r) => ({
         ...r,
         date: new Date(r.date),
@@ -81,19 +82,9 @@ export class EventController {
   }
 
   async list(request: Request, response: Response): Promise<Response> {
-    const { limit = "20", cursor, type, month, year } = request.query;
+    const parsed = listEventsHttpSchema.parse(request.query);
 
-    const parsedLimit = Math.min(Math.max(Number(limit) || 20, 1), 200);
-    const parsedMonth = month ? Math.max(Math.min(Number(month), 12), 1) : new Date().getMonth() + 1;
-    const parsedYear = year ? Number(year) || new Date().getFullYear() : new Date().getFullYear();
-
-    const result = await this.ListEventsUseCase.execute({
-      limit: parsedLimit,
-      cursor: cursor ? String(cursor) : undefined,
-      type: type ? (type as EventType) : undefined,
-      month: parsedMonth,
-      year: parsedYear,
-    });
+    const result = await this.ListEventsUseCase.execute(parsed);
 
     return response.status(200).json(result);
   }
