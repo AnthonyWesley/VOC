@@ -12,6 +12,7 @@ import { RemoveMemberFromEventUseCase } from "../../usecases/RemoveMemberFromEve
 import { GetMonthlyEventReportUseCase } from "../../usecases/GetMonthlyEventReportUseCase";
 import { EventType } from "@prisma/client";
 import { listEventsHttpSchema } from "../../domain/validation/eventQuerySchemas";
+import { monthlyReportHttpSchema } from "../../domain/validation/eventReportSchemas";
 
 export class EventController {
   constructor(
@@ -110,17 +111,8 @@ export class EventController {
     request: Request,
     response: Response,
   ): Promise<Response> {
-    const { month, year, type } = request.query;
-
-    const parsedMonth = Math.max(Math.min(Number(month) || 1, 12), 1);
-    const parsedYear = Number(year) || new Date().getFullYear();
-
-    const result = await this.getMonthlyEventReportUseCase.execute({
-      month: parsedMonth,
-      year: parsedYear,
-      type: type ? (type as EventType) : undefined,
-    });
-
+    const parsed = monthlyReportHttpSchema.parse(request.query);
+    const result = await this.getMonthlyEventReportUseCase.execute(parsed);
     return response.status(200).json(result);
   }
 

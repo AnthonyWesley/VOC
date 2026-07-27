@@ -17,14 +17,19 @@ import { createNotificationUseCase } from "../../../notification/infra/container
 import { whatsAppService } from "../../../../infra/whatsapp/whatsappContainer";
 import { PrismaEventAssignmentRepository } from "../repositories/PrismaEventAssignmentRepository";
 import { PrismaAssignMemberTransaction } from "../transactions/PrismaAssignMemberTransaction";
+import { PrismaSiteTimezoneProvider } from "../../../../site-content/infra/PrismaSiteTimezoneProvider";
+import { SystemClock } from "../../../../shared/infra/SystemClock";
 
 const eventRepository = new PrismaEventRepository(prisma);
 const categoryRepository = new PrismaCategoryRepository(prisma);
 
+const timezoneProvider = new PrismaSiteTimezoneProvider(prisma);
+const clock = new SystemClock();
+
 const close = new CloseEventWithSummaryUseCase(eventRepository, categoryRepository, prisma, socketServer, createNotificationUseCase, realtimePublisher);
 const get = new GetEventDetailedUseCase(eventRepository);
 const list = new ListEventsUseCase(eventRepository);
-const monthlyReport = new GetMonthlyEventReportUseCase(eventRepository);
+const monthlyReport = new GetMonthlyEventReportUseCase(eventRepository, timezoneProvider, clock);
 const softDelete = new DeleteEventUseCase(eventRepository, prisma);
 const update = new UpdateEventUseCase(eventRepository);
 const cancelEvent = new CancelEventUseCase(eventRepository);

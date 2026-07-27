@@ -37,7 +37,8 @@ export interface IEventRepository {
   getMonthlyReport(params: {
     month: number;
     year: number;
-    type?: EventType | null;
+    type?: EventType;
+    timezone: string;
   }): Promise<{
     month: number;
     year: number;
@@ -56,7 +57,7 @@ export interface IEventRepository {
       totalEvents: number;
       totalMembers: number;
       totalVisitors: number;
-      averageMembers: number;
+      averageMembers: number | null;
     };
     individual: {
       events: number;
