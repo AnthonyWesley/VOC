@@ -1,15 +1,15 @@
-// src/modules/auth/infra/http/middlewares/authMiddleware.ts
-
 import { Request, Response, NextFunction } from "express";
 import { UnauthorizedError } from "../../../../../shared/errors/UnauthorizedError";
 import { IJwtProvider } from "../../../../identity/domain/services/IJwtProvider";
+import { createLogger } from "../../../../../shared/logger/logger";
 
 export const makeAuthMiddleware = (jwtProvider: IJwtProvider) => {
   return (req: Request, _res: Response, next: NextFunction) => {
+    const logger = createLogger("auth");
     const token = req.cookies?.accessToken;
 
     if (!token) {
-      console.warn("[AUTH] MISSING_ACCESS_TOKEN cookies:", Object.keys(req.cookies || {}));
+      logger.warn({ errorCode: "MISSING_ACCESS_TOKEN", path: req.path }, "Missing access token");
       throw new UnauthorizedError("MISSING_ACCESS_TOKEN");
     }
 
@@ -18,7 +18,7 @@ export const makeAuthMiddleware = (jwtProvider: IJwtProvider) => {
       req.auth = { userId: payload.userId, userLevel: payload.userLevel };
       next();
     } catch (err) {
-      console.warn("[AUTH] INVALID_OR_EXPIRED_TOKEN for userId in token");
+      logger.warn({ errorCode: "INVALID_OR_EXPIRED_TOKEN", path: req.path }, "Invalid or expired token");
       throw new UnauthorizedError("INVALID_OR_EXPIRED_TOKEN");
     }
   };

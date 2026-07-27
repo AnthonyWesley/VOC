@@ -6,8 +6,10 @@ import { setSocketServer } from "./infra/socket/socketContainer";
 import { setWhatsAppService } from "./infra/whatsapp/whatsappContainer";
 import { WhatsAppInstanceService } from "./infra/whatsapp/WhatsAppInstanceService";
 import { startInactiveMembersCron } from "./infra/cron/checkInactiveMembers";
+import { createLogger } from "./shared/logger/logger";
 
 const PORT = 3333;
+const logger = createLogger("server");
 
 const httpServer = createServer(app);
 
@@ -15,11 +17,11 @@ const socketServer = new SocketServer(httpServer);
 setSocketServer(socketServer);
 
 httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  logger.info({ port: PORT }, "Server running");
 
   if (process.env.EVOLUTION_URL) {
     setWhatsAppService(new WhatsAppInstanceService());
-    console.log("WhatsApp Evolution service activated");
+    logger.info("WhatsApp Evolution service activated");
   }
 
   if (process.env.CRON_ENABLED === "true") {

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import { AppError } from "../errors/AppError";
+import { createLogger } from "../logger/logger";
 
 const portugueseMessages: Record<string, string> = {
   "Invalid input": "Valor inválido",
@@ -21,10 +22,11 @@ export function ErrorHandler(
   response: Response,
   next: NextFunction,
 ) {
-  console.error(`[${error.name}] ${error.message} — ${request.method} ${request.path}`);
+  const logger = createLogger("error-handler");
 
   if (error instanceof ZodError) {
     const issues = "issues" in error ? (error as any).issues : (error as any).errors ?? [];
+    logger.warn({ errorCode: "VALIDATION_ERROR", path: request.path }, "Validation error");
     return response.status(422).json({
       code: "VALIDATION_ERROR",
       message: "Dados inválidos. Verifique os campos e tente novamente.",
@@ -36,6 +38,8 @@ export function ErrorHandler(
   }
 
   if (error instanceof AppError) {
+    const level = error.statusCode >= 500 ? "error" : "warn";
+    logger[level]({ errorCode: error.code, statusCode: error.statusCode, path: request.path }, error.message);
     return response.status(error.statusCode).json({
       code: error.code || "UNKNOWN_ERROR",
       message: error.message,
@@ -43,6 +47,7 @@ export function ErrorHandler(
     });
   }
 
+  logger.error({ errorCode: "INTERNAL_SERVER_ERROR", path: request.path, err: error }, error.message);
   return response.status(500).json({
     code: "INTERNAL_SERVER_ERROR",
     message: "Erro interno do servidor. Tente novamente mais tarde.",

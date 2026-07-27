@@ -19,9 +19,13 @@ import { notificationRoutes } from "./modules/communication/infra/http/notificat
 import { whatsappRoutes } from "./modules/communication/infra/http/whatsappRoutes";
 import { postcodeRoutes } from "./modules/membership/infra/http/postcodeRoutes";
 import { swaggerSpec } from "./shared/swagger";
+import { requestIdMiddleware } from "./shared/logger/requestIdMiddleware";
+import { httpLoggerMiddleware } from "./shared/logger/httpLoggerMiddleware";
 
 const app = express();
 
+app.use(requestIdMiddleware);
+app.use(httpLoggerMiddleware);
 app.use(express.json());
 app.use(cookieParser());
 app.use(
