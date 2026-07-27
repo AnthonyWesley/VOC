@@ -510,3 +510,10 @@ model WhatsAppInstance {
 
   @@index([userId])
 }
+
+model JobLease {
+  name        String   @id
+  lockedBy    String
+  lockedUntil DateTime
+  updatedAt   DateTime @updatedAt
+}

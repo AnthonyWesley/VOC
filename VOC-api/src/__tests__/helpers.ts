@@ -29,6 +29,7 @@ export async function cleanIntegrationDatabase(prisma: PrismaClient): Promise<vo
     prisma.role.deleteMany(),
     prisma.siteContentSettings.deleteMany(),
   ]);
+  await prisma.$executeRawUnsafe(`DELETE FROM "JobLease"`);
 }
 
 export async function seedTestCategories(prisma: PrismaClient) {

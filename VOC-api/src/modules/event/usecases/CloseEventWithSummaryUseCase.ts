@@ -9,6 +9,7 @@ import { EventAttendance } from "../domain/entities/EventAttendance";
 import { FinancialRecord } from "../../financialRecord/domain/entities/FinancialRecord";
 import { Decimal } from "@prisma/client/runtime/library";
 import { ISocketServer } from "../../../infra/socket/ISocketServer";
+import { IRealtimeNotificationPublisher } from "../../../infra/socket/RealtimeNotificationPublisher";
 import { CreateNotificationUseCase } from "../../notification/usecases/CreateNotificationUseCase";
 import { PrismaClient } from "@prisma/client";
 
@@ -51,6 +52,7 @@ export class CloseEventWithSummaryUseCase {
     private readonly prisma: PrismaClient,
     private readonly socketServer?: ISocketServer,
     private readonly createNotification?: CreateNotificationUseCase,
+    private readonly realtimePublisher?: IRealtimeNotificationPublisher,
   ) {}
 
   async execute(input: CloseEventInput): Promise<CloseEventOutput> {
@@ -161,7 +163,7 @@ export class CloseEventWithSummaryUseCase {
           deduplicationKey: `v1:evento-criado:${event.id}`,
         });
         if (result?.created) {
-          this.socketServer?.emitToUser(admin.id, "notification", { type: "EVENTO_CRIADO", eventId: event.id });
+          this.realtimePublisher?.publish(admin.id, result.notification);
         }
       }
     }

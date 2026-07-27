@@ -2,11 +2,11 @@ import { WhatsAppConnectionStateResult, WhatsAppSendResult } from "../../shared/
 import { IWhatsAppService } from "./IWhatsAppService";
 
 export class NullWhatsAppService implements IWhatsAppService {
-  async sendMessage(): Promise<WhatsAppSendResult> {
+  async sendMessage(_phone: string, _message: string, _messageType: string): Promise<WhatsAppSendResult> {
     return { ok: false, code: "NOT_CONFIGURED", retryable: false };
   }
 
-  async connectionState(): Promise<WhatsAppConnectionStateResult> {
+  async connectionState(_instanceName: string): Promise<WhatsAppConnectionStateResult> {
     return { ok: false, code: "NOT_CONFIGURED" };
   }
 }

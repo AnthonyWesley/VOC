@@ -4,6 +4,7 @@ import { ValidationError } from "../../../shared/errors/ValidationError";
 import { ConflictError } from "../../../shared/errors/ConflictError";
 import { ForbiddenError } from "../../../shared/errors/ForbiddenError";
 import { ISocketServer } from "../../../infra/socket/ISocketServer";
+import { IRealtimeNotificationPublisher } from "../../../infra/socket/RealtimeNotificationPublisher";
 import { CreateNotificationUseCase } from "../../notification/usecases/CreateNotificationUseCase";
 import { IWhatsAppService } from "../../../infra/whatsapp/IWhatsAppService";
 import { createLogger } from "../../../shared/logger/logger";
@@ -26,6 +27,7 @@ export class AssignMemberToEventUseCase {
     private readonly socketServer?: ISocketServer,
     private readonly createNotification?: CreateNotificationUseCase,
     private readonly whatsApp?: IWhatsAppService,
+    private readonly realtimePublisher?: IRealtimeNotificationPublisher,
   ) {}
 
   async execute(input: AssignMemberToEventInput): Promise<AssignMemberToEventOutput> {
@@ -81,7 +83,7 @@ export class AssignMemberToEventUseCase {
 
         if (result?.created) {
           setImmediate(() => {
-            this.socketServer?.emitToUser(memberUserId, "notification", { type: "MEMBRO_ESCALADO", eventId });
+            this.realtimePublisher?.publish(memberUserId, result.notification);
           });
         }
 

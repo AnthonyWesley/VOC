@@ -6,6 +6,7 @@ import { whatsAppService } from "../../../../infra/whatsapp/whatsappContainer";
 import { prisma } from "../../../../package/prisma";
 import { LEVEL } from "../../../../shared/constants/levels";
 import { createLogger } from "../../../../shared/logger/logger";
+import { whatsappAdminLimiter } from "../../../../infra/whatsapp/whatsappLimiter";
 
 const router = Router();
 const jwtProvider = new JwtProvider();
@@ -47,6 +48,7 @@ router.post(
   "/instance",
   auth,
   requireLevel(LEVEL.PRESIDENT),
+  whatsappAdminLimiter,
   async (req, res) => {
     const userId = req.auth!.userId;
     const { instanceName } = req.body;
@@ -94,6 +96,7 @@ router.get(
   "/instance/:instanceName/qrcode",
   auth,
   requireLevel(LEVEL.PRESIDENT),
+  whatsappAdminLimiter,
   async (req, res) => {
     const instanceName = String(req.params.instanceName);
 
@@ -132,6 +135,7 @@ router.delete(
   "/instance/:instanceName",
   auth,
   requireLevel(LEVEL.PRESIDENT),
+  whatsappAdminLimiter,
   async (req, res) => {
     const instanceName = String(req.params.instanceName);
 
@@ -150,6 +154,7 @@ router.post(
   "/instance/:instanceName/restart",
   auth,
   requireLevel(LEVEL.PRESIDENT),
+  whatsappAdminLimiter,
   async (req, res) => {
     const instanceName = String(req.params.instanceName);
 

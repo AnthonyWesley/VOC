@@ -3,6 +3,7 @@ import { IEventRepository } from "../domain/repositories/IEventRepository";
 import { ValidationError } from "../../../shared/errors/ValidationError";
 import { ForbiddenError } from "../../../shared/errors/ForbiddenError";
 import { ISocketServer } from "../../../infra/socket/ISocketServer";
+import { IRealtimeNotificationPublisher } from "../../../infra/socket/RealtimeNotificationPublisher";
 import { CreateNotificationUseCase } from "../../notification/usecases/CreateNotificationUseCase";
 import { IWhatsAppService } from "../../../infra/whatsapp/IWhatsAppService";
 import { createLogger } from "../../../shared/logger/logger";
@@ -27,6 +28,7 @@ export class RemoveMemberFromEventUseCase {
     private readonly socketServer?: ISocketServer,
     private readonly createNotification?: CreateNotificationUseCase,
     private readonly whatsApp?: IWhatsAppService,
+    private readonly realtimePublisher?: IRealtimeNotificationPublisher,
   ) {}
 
   async execute(
@@ -126,10 +128,7 @@ export class RemoveMemberFromEventUseCase {
         deduplicationKey: assignmentId ? `v1:membro-removido:${assignmentId}` : undefined,
       });
       if (result?.created) {
-        this.socketServer?.emitToUser(member.userId, "notification", {
-          type: "MEMBRO_REMOVIDO",
-          eventId,
-        });
+        this.realtimePublisher?.publish(member.userId, result.notification);
       }
     }
 

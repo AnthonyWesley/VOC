@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { INotificationRepository } from "../domain/repositories/INotificationRepository";
 import { CreateNotificationUseCase } from "./CreateNotificationUseCase";
 import { IWhatsAppService } from "../../../infra/whatsapp/IWhatsAppService";
+import { InactiveMembersProcessingSummary } from "../../../infra/jobs/types";
 import { createLogger } from "../../../shared/logger/logger";
 import { maskPhone } from "../../../shared/types/whatsapp";
 
@@ -18,7 +19,7 @@ export class NotifyInactiveMembersUseCase {
     private readonly whatsApp?: IWhatsAppService,
   ) {}
 
-  async execute(): Promise<void> {
+  async execute(): Promise<InactiveMembersProcessingSummary> {
     const eventTypes = ["HOUSE_SERVICE", "SUNDAY_SERVICE", "PRAYER_MEETING", "BIBLE_STUDY", "YOUTH_NIGHT", "SPECIAL_EVENT"] as const;
 
     const adminUsers = await this.prisma.user.findMany({
@@ -29,7 +30,9 @@ export class NotifyInactiveMembersUseCase {
       select: { id: true },
     });
 
-    if (adminUsers.length === 0) return;
+    if (adminUsers.length === 0) {
+      return { membersEvaluated: 0, notificationsCreated: 0, notificationsDeduplicated: 0, whatsappAccepted: 0, whatsappFailed: 0 };
+    }
 
     const eventTypeLabels: Record<string, string> = {
       HOUSE_SERVICE: "Culto em Casa",
@@ -43,6 +46,9 @@ export class NotifyInactiveMembersUseCase {
     const thresholdDate = new Date(Date.now() - INACTIVE_MS);
     const thirtyDaysAgo = new Date(Date.now() - INACTIVE_MS);
 
+    let membersEvaluated = 0;
+    let notificationsCreated = 0;
+    let notificationsDeduplicated = 0;
     let whatsappAccepted = 0;
     let whatsappFailed = 0;
 
@@ -76,6 +82,7 @@ export class NotifyInactiveMembersUseCase {
       });
 
       for (const member of inactiveMembers) {
+        membersEvaluated++;
         const lastEvent = member.events[0]?.event.startsAt;
         const daysSince = lastEvent
           ? Math.floor((Date.now() - new Date(lastEvent).getTime()) / 86_400_000)
@@ -95,7 +102,7 @@ export class NotifyInactiveMembersUseCase {
           });
 
           if (recentCount === 0) {
-            await this.createNotification.execute({
+            const notifResult = await this.createNotification.execute({
               userId: admin.id,
               type: "MEMBER_AUSENTE",
               title: `Membro ausente — ${member.fullName}`,
@@ -107,6 +114,8 @@ export class NotifyInactiveMembersUseCase {
                 daysSinceLastEvent: daysSince,
               },
             });
+            if (notifResult.created) notificationsCreated++;
+            else notificationsDeduplicated++;
           }
         }
 
@@ -131,6 +140,8 @@ export class NotifyInactiveMembersUseCase {
       }
     }
 
-    this.logger.info({ operation: "inactive_members_job", whatsappAccepted, whatsappFailed }, "WhatsApp delivery summary");
+    this.logger.info({ operation: "inactive_members_job", membersEvaluated, notificationsCreated, notificationsDeduplicated, whatsappAccepted, whatsappFailed }, "Inactive members job completed");
+
+    return { membersEvaluated, notificationsCreated, notificationsDeduplicated, whatsappAccepted, whatsappFailed };
   }
 }

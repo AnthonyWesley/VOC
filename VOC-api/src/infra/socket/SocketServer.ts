@@ -2,8 +2,7 @@ import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import jwt from "jsonwebtoken";
 import { ISocketServer } from "./ISocketServer";
-
-const onlineUsers = new Map<string, Set<string>>();
+import { parseCorsOrigins } from "../../shared/cors";
 
 function parseCookies(cookieHeader?: string): Record<string, string> {
   const cookies: Record<string, string> = {};
@@ -17,14 +16,17 @@ function parseCookies(cookieHeader?: string): Record<string, string> {
 
 export class SocketServer implements ISocketServer {
   private io: Server;
+  private onlineUsers = new Map<string, Set<string>>();
 
   constructor(server: HttpServer) {
     const secret = process.env.JWT_SECRET;
 
+    const socketCorsOrigins = parseCorsOrigins(process.env.CORS_ORIGINS);
+
     this.io = new Server(server, {
       path: "/socket.io/",
       cors: {
-        origin: ["http://localhost:5173", "http://localhost:5174"],
+        origin: socketCorsOrigins,
         credentials: true,
         methods: ["GET", "POST"],
       },
@@ -33,7 +35,7 @@ export class SocketServer implements ISocketServer {
 
     this.io.use((socket, next) => {
       const cookies = parseCookies(socket.request.headers.cookie);
-      const token = cookies.accessToken;
+      const token = cookies.accessToken || socket.handshake.auth.token;
 
       if (!token) return next(new Error("UNAUTHORIZED"));
 
@@ -42,10 +44,10 @@ export class SocketServer implements ISocketServer {
         socket.data.userId = payload.userId;
         socket.join(`user:${payload.userId}`);
 
-        if (!onlineUsers.has(payload.userId)) {
-          onlineUsers.set(payload.userId, new Set());
+        if (!this.onlineUsers.has(payload.userId)) {
+          this.onlineUsers.set(payload.userId, new Set());
         }
-        onlineUsers.get(payload.userId)!.add(socket.id);
+        this.onlineUsers.get(payload.userId)!.add(socket.id);
 
         next();
       } catch {
@@ -56,10 +58,10 @@ export class SocketServer implements ISocketServer {
     this.io.on("connection", (socket: Socket) => {
       socket.on("disconnect", () => {
         const userId = socket.data.userId as string | undefined;
-        if (userId && onlineUsers.has(userId)) {
-          const sockets = onlineUsers.get(userId)!;
+        if (userId && this.onlineUsers.has(userId)) {
+          const sockets = this.onlineUsers.get(userId)!;
           sockets.delete(socket.id);
-          if (sockets.size === 0) onlineUsers.delete(userId);
+          if (sockets.size === 0) this.onlineUsers.delete(userId);
         }
       });
     });
@@ -71,6 +73,15 @@ export class SocketServer implements ISocketServer {
 
   emitToUser(userId: string, eventName: string, payload: unknown) {
     this.io.to(`user:${userId}`).emit(eventName, payload);
+  }
+
+  isUserOnline(userId: string): boolean {
+    const sockets = this.onlineUsers.get(userId);
+    return sockets !== undefined && sockets.size > 0;
+  }
+
+  getOnlineUserCount(): number {
+    return this.onlineUsers.size;
   }
 
   getIO() {

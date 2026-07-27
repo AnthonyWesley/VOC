@@ -3,6 +3,7 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
+import { parseCorsOrigins, createCorsOptions } from "./shared/cors";
 
 import { postRoutes } from "./modules/communication/infra/http/postRoutes";
 import { ErrorHandler } from "./shared/middlewares/ErrorHandle";
@@ -18,9 +19,13 @@ import { siteContentRoutes } from "./modules/communication/infra/http/siteConten
 import { notificationRoutes } from "./modules/communication/infra/http/notificationRoutes";
 import { whatsappRoutes } from "./modules/communication/infra/http/whatsappRoutes";
 import { postcodeRoutes } from "./modules/membership/infra/http/postcodeRoutes";
+import { adminRoutes } from "./modules/communication/infra/http/adminRoutes";
 import { swaggerSpec } from "./shared/swagger";
 import { requestIdMiddleware } from "./shared/logger/requestIdMiddleware";
 import { httpLoggerMiddleware } from "./shared/logger/httpLoggerMiddleware";
+import { HealthController } from "./shared/health/healthController";
+import { createHealthRoutes } from "./shared/health/healthRoutes";
+import { prisma } from "./package/prisma";
 
 const app = express();
 
@@ -47,17 +52,8 @@ app.use(
   }),
 );
 
-app.use(
-  cors({
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "http://localhost:5175",
-      "http://localhost:5176",
-    ],
-    credentials: true,
-  }),
-);
+const corsOrigins = parseCorsOrigins(process.env.CORS_ORIGINS);
+app.use(cors(createCorsOptions(corsOrigins)));
 
 app.use("/users", userRoutes);
 app.use("/roles", roleRoutes);
@@ -72,8 +68,15 @@ app.use("/site-content", siteContentRoutes);
 app.use("/notifications", notificationRoutes);
 app.use("/whatsapp", whatsappRoutes);
 app.use("/postcode", postcodeRoutes);
+app.use("/admin", adminRoutes);
 
-app.get("/health", (_, res) => res.json({ status: "ok" }));
+const healthController = new HealthController(
+  prisma,
+  () => !!process.env.EVOLUTION_URL,
+);
+const healthRoutes = createHealthRoutes(healthController);
+app.use("/health", healthRoutes);
+
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get("/api-docs.json", (_, res) => res.json(swaggerSpec));
 
