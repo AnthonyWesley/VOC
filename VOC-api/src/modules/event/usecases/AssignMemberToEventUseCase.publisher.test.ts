@@ -7,14 +7,36 @@ function mockWhatsApp() {
 }
 
 function makeSut(publisher: IRealtimeNotificationPublisher, createNotificationResult?: { created: boolean; notification: any } | "UNDEFINED") {
-  const repo = {
+  const eventRepo = {
     assignAssignment: vi.fn(),
-    findAssignment: vi.fn().mockResolvedValue({ id: "assignment-1" }),
+    findAssignment: vi.fn(),
     assignMember: vi.fn(),
     findMemberAttendance: vi.fn(),
+    findById: vi.fn().mockResolvedValue({ id: "event-1", title: "Test", type: "SUNDAY_SERVICE", startsAt: new Date(), status: "SCHEDULED", isDeleted: false }),
+  };
+  const assignmentLookup = {
+    find: vi.fn(),
+    create: vi.fn(),
+  };
+  const transaction = {
+    execute: vi.fn().mockImplementation(async (callback: any) => {
+      const mockAssignments = {
+        create: vi.fn().mockResolvedValue({ id: "assignment-1", eventId: "event-1", memberId: "member-1", ministryId: "ministry-1", assignedAt: new Date() }),
+        find: vi.fn(),
+      };
+      const mockNotifications = {
+        create: vi.fn(),
+        findById: vi.fn(),
+        findByDedupKey: vi.fn(),
+        list: vi.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        countUnread: vi.fn(),
+      };
+      return callback({ assignments: mockAssignments, notifications: mockNotifications });
+    }),
   };
   const prisma = {
-    event: { findUnique: vi.fn().mockResolvedValue({ id: "event-1", title: "Test", type: "SUNDAY_SERVICE", startsAt: new Date(), status: "ACTIVE" }) },
     member: { findUnique: vi.fn().mockResolvedValue({ id: "member-1", fullName: "John", userId: "user-1", phone: "5511999999999" }) },
     user: { findUnique: vi.fn().mockResolvedValue({ id: "user-admin", member: null }) },
     ministry: { findUnique: vi.fn().mockResolvedValue({ id: "ministry-1", name: "Music", leaderId: "leader-1" }) },
@@ -27,15 +49,16 @@ function makeSut(publisher: IRealtimeNotificationPublisher, createNotificationRe
   };
 
   const useCase = new AssignMemberToEventUseCase(
-    repo as any,
-    prisma as any,
-    undefined,
+    eventRepo as any,
+    assignmentLookup as any,
+    transaction as any,
     createNotification as any,
+    prisma as any,
     mockWhatsApp() as any,
     publisher,
   );
 
-  return { useCase, repo, createNotification, publisher };
+  return { useCase, eventRepo, createNotification, publisher };
 }
 
 describe("AssignMemberToEventUseCase — publisher", () => {
@@ -50,9 +73,6 @@ describe("AssignMemberToEventUseCase — publisher", () => {
       userId: "admin-1",
       userLevel: 100,
     });
-
-    // Flush setImmediate from the use case
-    await new Promise<void>((resolve) => setImmediate(() => resolve()));
 
     expect(publish).toHaveBeenCalledWith("user-1", expect.any(Object));
   });

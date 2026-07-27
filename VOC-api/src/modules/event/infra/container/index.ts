@@ -15,6 +15,8 @@ import { EventController } from "../controllers/EventController";
 import { socketServer, realtimePublisher } from "../../../../infra/socket/socketContainer";
 import { createNotificationUseCase } from "../../../notification/infra/container";
 import { whatsAppService } from "../../../../infra/whatsapp/whatsappContainer";
+import { PrismaEventAssignmentRepository } from "../repositories/PrismaEventAssignmentRepository";
+import { PrismaAssignMemberTransaction } from "../transactions/PrismaAssignMemberTransaction";
 
 const eventRepository = new PrismaEventRepository(prisma);
 const categoryRepository = new PrismaCategoryRepository(prisma);
@@ -28,7 +30,10 @@ const update = new UpdateEventUseCase(eventRepository);
 const cancelEvent = new CancelEventUseCase(eventRepository);
 const correctEvent = new CorrectEventUseCase(eventRepository, prisma);
 
-const assignMember = new AssignMemberToEventUseCase(eventRepository, prisma, socketServer, createNotificationUseCase, whatsAppService, realtimePublisher);
+const assignmentLookup = new PrismaEventAssignmentRepository(prisma);
+const assignmentTransaction = new PrismaAssignMemberTransaction(prisma);
+
+const assignMember = new AssignMemberToEventUseCase(eventRepository, assignmentLookup, assignmentTransaction, createNotificationUseCase, prisma, whatsAppService, realtimePublisher);
 const removeMember = new RemoveMemberFromEventUseCase(eventRepository, prisma, socketServer, createNotificationUseCase, whatsAppService, realtimePublisher);
 
 export const eventController = new EventController(

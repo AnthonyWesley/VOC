@@ -17,10 +17,21 @@ export type CreateNotificationResult = {
   created: boolean;
 };
 
+export type CreateNotificationOptions = {
+  repository?: INotificationRepository;
+  recoverDeduplicationConflict?: boolean;
+};
+
 export class CreateNotificationUseCase {
   constructor(private readonly notificationRepo: INotificationRepository) {}
 
-  async execute(input: CreateNotificationInput): Promise<CreateNotificationResult> {
+  async execute(
+    input: CreateNotificationInput,
+    options: CreateNotificationOptions = {},
+  ): Promise<CreateNotificationResult> {
+    const repo = options.repository ?? this.notificationRepo;
+    const recoverDeduplicationConflict = options.recoverDeduplicationConflict ?? true;
+
     const validatedPayload = input.payload
       ? validateNotificationPayload(input.type, input.payload)
       : null;
@@ -38,16 +49,13 @@ export class CreateNotificationUseCase {
       createdAt: new Date(),
     });
 
-    if (input.deduplicationKey) {
+    if (input.deduplicationKey && recoverDeduplicationConflict) {
       try {
-        await this.notificationRepo.create(notification);
+        await repo.create(notification);
         return { notification: notification.toDTO(), created: true };
       } catch (err: any) {
         if (err.code === "P2002") {
-          const existing = await this.notificationRepo.findByDedupKey(
-            input.userId,
-            input.deduplicationKey,
-          );
+          const existing = await repo.findByDedupKey(input.userId, input.deduplicationKey);
           if (existing) {
             return { notification: existing.toDTO(), created: false };
           }
@@ -56,7 +64,7 @@ export class CreateNotificationUseCase {
       }
     }
 
-    await this.notificationRepo.create(notification);
+    await repo.create(notification);
     return { notification: notification.toDTO(), created: true };
   }
 }

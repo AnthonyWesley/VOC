@@ -17,11 +17,13 @@ function toDomain(raw: Prisma.NotificationGetPayload<{}>): Notification {
   });
 }
 
+type NotificationDb = Pick<PrismaClient, "notification">;
+
 export class PrismaNotificationRepository implements INotificationRepository {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private readonly db: NotificationDb) {}
 
   async create(notification: Notification): Promise<void> {
-    await this.prisma.notification.create({
+    await this.db.notification.create({
       data: {
         id: notification.id,
         userId: notification.userId,
@@ -38,13 +40,13 @@ export class PrismaNotificationRepository implements INotificationRepository {
   }
 
   async findById(id: string): Promise<Notification | null> {
-    const data = await this.prisma.notification.findUnique({ where: { id } });
+    const data = await this.db.notification.findUnique({ where: { id } });
     if (!data) return null;
     return toDomain(data);
   }
 
   async findByDedupKey(userId: string, deduplicationKey: string): Promise<Notification | null> {
-    const data = await this.prisma.notification.findUnique({
+    const data = await this.db.notification.findUnique({
       where: { userId_deduplicationKey: { userId, deduplicationKey } },
     });
     if (!data) return null;
@@ -55,13 +57,13 @@ export class PrismaNotificationRepository implements INotificationRepository {
     const { userId, offset = 0, limit = 10 } = params;
 
     const [items, totalCount] = await Promise.all([
-      this.prisma.notification.findMany({
+      this.db.notification.findMany({
         where: { userId },
         orderBy: { createdAt: "desc" },
         skip: offset,
         take: limit,
       }),
-      this.prisma.notification.count({ where: { userId } }),
+      this.db.notification.count({ where: { userId } }),
     ]);
 
     return {
@@ -71,14 +73,14 @@ export class PrismaNotificationRepository implements INotificationRepository {
   }
 
   async markAsRead(notificationId: string, userId: string): Promise<void> {
-    await this.prisma.notification.updateMany({
+    await this.db.notification.updateMany({
       where: { id: notificationId, userId, readAt: null },
       data: { readAt: new Date() },
     });
   }
 
   async markAllAsRead(userId: string, readAt: Date): Promise<number> {
-    const result = await this.prisma.notification.updateMany({
+    const result = await this.db.notification.updateMany({
       where: { userId, readAt: null },
       data: { readAt },
     });
@@ -86,7 +88,7 @@ export class PrismaNotificationRepository implements INotificationRepository {
   }
 
   async countUnread(userId: string): Promise<number> {
-    return this.prisma.notification.count({
+    return this.db.notification.count({
       where: { userId, readAt: null },
     });
   }

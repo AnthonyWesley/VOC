@@ -15,6 +15,53 @@ function createMockRepo(): INotificationRepository {
 }
 
 describe("CreateNotificationUseCase", () => {
+  it("uses default repo when options omitted", async () => {
+    const repo = createMockRepo();
+    const uc = new CreateNotificationUseCase(repo);
+
+    await uc.execute({
+      userId: "u-1",
+      type: "EVENTO_CRIADO",
+      title: "Test",
+      deduplicationKey: "k-1",
+    });
+
+    expect(repo.create).toHaveBeenCalledTimes(1);
+    expect(repo.findByDedupKey).not.toHaveBeenCalled();
+  });
+
+  it("uses provided repository when options.repository is set", async () => {
+    const defaultRepo = createMockRepo();
+    const customRepo = createMockRepo();
+    const uc = new CreateNotificationUseCase(defaultRepo);
+
+    await uc.execute({
+      userId: "u-1",
+      type: "MEMBRO_VINCULADO",
+      title: "Test",
+      deduplicationKey: "k-1",
+    }, { repository: customRepo });
+
+    expect(customRepo.create).toHaveBeenCalledTimes(1);
+    expect(defaultRepo.create).not.toHaveBeenCalled();
+  });
+
+  it("rethrows P2002 when recoverDeduplicationConflict=false", async () => {
+    const repo = createMockRepo();
+    (repo.create as any).mockRejectedValue({ code: "P2002" });
+    const uc = new CreateNotificationUseCase(repo);
+
+    await expect(uc.execute({
+      userId: "u-1",
+      type: "MEMBRO_ESCALADO",
+      title: "Test",
+      deduplicationKey: "k-1",
+    }, { recoverDeduplicationConflict: false })).rejects.toEqual({ code: "P2002" });
+
+    expect(repo.findByDedupKey).not.toHaveBeenCalled();
+  });
+
+
   it("creates notification without dedup key", async () => {
     const repo = createMockRepo();
     const uc = new CreateNotificationUseCase(repo);
@@ -24,7 +71,7 @@ describe("CreateNotificationUseCase", () => {
       type: "EVENTO_CRIADO",
       title: "Novo evento",
       message: "Teste",
-      payload: { eventId: "550e8400-e29b-41d4-a716-446655440000", eventTitle: "Culto", eventType: "SUNDAY_SERVICE", needsScale: false },
+      payload: { eventId: "01ARZ3NDEKTSV4RRFFQ69G5FAV", eventTitle: "Culto", eventType: "SUNDAY_SERVICE", needsScale: false },
     });
 
     expect(result.created).toBe(true);
@@ -41,7 +88,7 @@ describe("CreateNotificationUseCase", () => {
       userId: "u-1",
       type: "MEMBRO_VINCULADO",
       title: "Bem-vindo",
-      payload: { memberId: "550e8400-e29b-41d4-a716-446655440000", memberName: "João" },
+      payload: { memberId: "01ARZ3NDEKTSV4RRFFQ69G5FAX", memberName: "João" },
       deduplicationKey: "v1:membro-vinculado:m-1",
     });
 
@@ -57,7 +104,7 @@ describe("CreateNotificationUseCase", () => {
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce({ code: "P2002" });
 
-    const memberId = "550e8400-e29b-41d4-a716-446655440000";
+    const memberId = "01ARZ3NDEKTSV4RRFFQ69G5FAX";
     const existingNotification = {
       id: "existing-id",
       userId: "u-1",
