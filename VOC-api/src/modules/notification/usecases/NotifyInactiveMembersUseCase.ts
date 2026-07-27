@@ -2,12 +2,15 @@ import { PrismaClient } from "@prisma/client";
 import { INotificationRepository } from "../domain/repositories/INotificationRepository";
 import { CreateNotificationUseCase } from "./CreateNotificationUseCase";
 import { IWhatsAppService } from "../../../infra/whatsapp/IWhatsAppService";
+import { createLogger } from "../../../shared/logger/logger";
+import { maskPhone } from "../../../shared/types/whatsapp";
 
 const INACTIVE_DAYS = 30;
 const INACTIVE_MS = INACTIVE_DAYS * 86_400_000;
-const thresholdDate = new Date(Date.now() - INACTIVE_MS);
 
 export class NotifyInactiveMembersUseCase {
+  private logger = createLogger("notify-inactive-members");
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly notificationRepo: INotificationRepository,
@@ -37,6 +40,12 @@ export class NotifyInactiveMembersUseCase {
       SPECIAL_EVENT: "Evento Especial",
     };
 
+    const thresholdDate = new Date(Date.now() - INACTIVE_MS);
+    const thirtyDaysAgo = new Date(Date.now() - INACTIVE_MS);
+
+    let whatsappAccepted = 0;
+    let whatsappFailed = 0;
+
     for (const type of eventTypes) {
       const inactiveMembers = await this.prisma.member.findMany({
         where: {
@@ -65,8 +74,6 @@ export class NotifyInactiveMembersUseCase {
           },
         },
       });
-
-      const thirtyDaysAgo = new Date(Date.now() - INACTIVE_MS);
 
       for (const member of inactiveMembers) {
         const lastEvent = member.events[0]?.event.startsAt;
@@ -104,13 +111,26 @@ export class NotifyInactiveMembersUseCase {
         }
 
         if (member.phone) {
-          await this.whatsApp?.sendMessage(
+          const result = await this.whatsApp!.sendMessage(
             member.phone,
             `Oi ${member.fullName}! Sentimos sua falta nos nossos encontros. Já fazem ${daysSince} dias desde sua última participação, e queremos muito te ver novamente. Sua presença faz diferença na nossa comunidade!`,
             "default",
-          ).catch(() => {});
+          );
+
+          if (result.ok) {
+            whatsappAccepted++;
+          } else {
+            whatsappFailed++;
+            if (result.code === "NOT_CONFIGURED") {
+              this.logger.debug({ operation: "whatsapp_send", resultCode: "NOT_CONFIGURED" }, "WhatsApp not configured");
+            } else {
+              this.logger.warn({ operation: "whatsapp_send", resultCode: result.code, retryable: result.retryable, phone: maskPhone(member.phone) }, "WhatsApp message was not accepted");
+            }
+          }
         }
       }
     }
+
+    this.logger.info({ operation: "inactive_members_job", whatsappAccepted, whatsappFailed }, "WhatsApp delivery summary");
   }
 }

@@ -3,8 +3,7 @@ import { createServer } from "http";
 import { app } from "./app";
 import { SocketServer } from "./infra/socket/SocketServer";
 import { setSocketServer } from "./infra/socket/socketContainer";
-import { setWhatsAppService } from "./infra/whatsapp/whatsappContainer";
-import { WhatsAppInstanceService } from "./infra/whatsapp/WhatsAppInstanceService";
+import { setWhatsAppService, createRealWhatsAppService } from "./infra/whatsapp/whatsappContainer";
 import { startInactiveMembersCron } from "./infra/cron/checkInactiveMembers";
 import { createLogger } from "./shared/logger/logger";
 
@@ -20,7 +19,7 @@ httpServer.listen(PORT, () => {
   logger.info({ port: PORT }, "Server running");
 
   if (process.env.EVOLUTION_URL) {
-    setWhatsAppService(new WhatsAppInstanceService());
+    setWhatsAppService(createRealWhatsAppService());
     logger.info("WhatsApp Evolution service activated");
   }
 

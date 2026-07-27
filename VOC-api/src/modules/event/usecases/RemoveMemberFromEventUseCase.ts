@@ -5,6 +5,8 @@ import { ForbiddenError } from "../../../shared/errors/ForbiddenError";
 import { ISocketServer } from "../../../infra/socket/ISocketServer";
 import { CreateNotificationUseCase } from "../../notification/usecases/CreateNotificationUseCase";
 import { IWhatsAppService } from "../../../infra/whatsapp/IWhatsAppService";
+import { createLogger } from "../../../shared/logger/logger";
+import { maskPhone } from "../../../shared/types/whatsapp";
 
 export type RemoveMemberFromEventInput = {
   eventId: string;
@@ -132,13 +134,16 @@ export class RemoveMemberFromEventUseCase {
     }
 
     if (member.phone) {
-      await this.whatsApp
-        ?.sendMessage(
+      const result = await this.whatsApp!
+        .sendMessage(
           member.phone,
           `Oi ${member.fullName}, tudo bem? Informamos que você não estará mais na escala do *${ministryName}* para o evento *${eventLabel}* em ${dateStr}. Obrigado pela sua disponibilidade, e em breve surgirão novas oportunidades para servir.`,
           "default",
-        )
-        .catch(() => {});
+        );
+
+      if (!result.ok && result.code !== "NOT_CONFIGURED") {
+        createLogger("remove-member-event").warn({ operation: "whatsapp_send", resultCode: result.code, phone: maskPhone(member.phone) }, "WhatsApp message was not accepted");
+      }
     }
   }
 }

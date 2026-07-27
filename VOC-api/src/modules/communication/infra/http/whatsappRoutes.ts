@@ -2,14 +2,15 @@ import { Router } from "express";
 import { JwtProvider } from "../../../identity/infra/providers/JwtProvider";
 import { makeAuthMiddleware } from "./middlewares/authMiddleware";
 import { requireLevel } from "./middlewares/requireLevel";
-import { WhatsAppInstanceService } from "../../../../infra/whatsapp/WhatsAppInstanceService";
+import { whatsAppService } from "../../../../infra/whatsapp/whatsappContainer";
 import { prisma } from "../../../../package/prisma";
 import { LEVEL } from "../../../../shared/constants/levels";
+import { createLogger } from "../../../../shared/logger/logger";
 
 const router = Router();
 const jwtProvider = new JwtProvider();
 const auth = makeAuthMiddleware(jwtProvider);
-const evolution = new WhatsAppInstanceService();
+const logger = createLogger("whatsapp-routes");
 
 router.get(
   "/instance",
@@ -26,10 +27,7 @@ router.get(
       return res.json({ instance: null });
     }
 
-    let state = "close";
-    try {
-      state = await evolution.connectionState(instance.instanceName);
-    } catch {}
+    const stateResult = await whatsAppService.connectionState(instance.instanceName);
 
     return res.json({
       instance: {
@@ -37,7 +35,7 @@ router.get(
         instanceName: instance.instanceName,
         number: instance.number,
         isActive: instance.isActive,
-        state,
+        state: stateResult.ok ? stateResult.state : "UNKNOWN",
         createdAt: instance.createdAt,
         updatedAt: instance.updatedAt,
       },
@@ -67,6 +65,7 @@ router.post(
     }
 
     try {
+      const evolution = whatsAppService as any;
       const result = await evolution.createInstance(instanceName);
 
       await prisma.whatsAppInstance.create({
@@ -83,6 +82,7 @@ router.post(
         pairingCode: result?.qrcode ?? null,
       });
     } catch (err: any) {
+      logger.warn({ operation: "whatsapp_create_instance", errorCode: "CREATE_FAILED" }, err.message ?? "Erro ao criar instância");
       return res
         .status(500)
         .json({ message: err.message ?? "Erro ao criar instância" });
@@ -98,6 +98,7 @@ router.get(
     const instanceName = String(req.params.instanceName);
 
     try {
+      const evolution = whatsAppService as any;
       const result = await evolution.getQrCode(instanceName);
       return res.json({
         qrcode: result?.base64 ?? null,
@@ -116,12 +117,14 @@ router.get(
   async (req, res) => {
     const instanceName = String(req.params.instanceName);
 
-    try {
-      const state = await evolution.connectionState(instanceName);
-      return res.json({ state });
-    } catch {
-      return res.json({ state: "close" });
+    const stateResult = await whatsAppService.connectionState(instanceName);
+
+    if (stateResult.ok) {
+      return res.json({ state: stateResult.state });
     }
+
+    logger.warn({ operation: "whatsapp_connection_state", resultCode: stateResult.code }, "State check failed");
+    return res.json({ state: "UNKNOWN" });
   },
 );
 
@@ -133,6 +136,7 @@ router.delete(
     const instanceName = String(req.params.instanceName);
 
     try {
+      const evolution = whatsAppService as any;
       await evolution.deleteInstance(instanceName);
     } catch {}
 
@@ -150,6 +154,7 @@ router.post(
     const instanceName = String(req.params.instanceName);
 
     try {
+      const evolution = whatsAppService as any;
       await evolution.restartInstance(instanceName);
       return res.json({ message: "Instância reiniciada" });
     } catch {

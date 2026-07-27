@@ -5,6 +5,9 @@ import { ConflictError } from "../../../shared/errors/ConflictError";
 import { ForbiddenError } from "../../../shared/errors/ForbiddenError";
 import { ISocketServer } from "../../../infra/socket/ISocketServer";
 import { CreateNotificationUseCase } from "../../notification/usecases/CreateNotificationUseCase";
+import { IWhatsAppService } from "../../../infra/whatsapp/IWhatsAppService";
+import { createLogger } from "../../../shared/logger/logger";
+import { maskPhone } from "../../../shared/types/whatsapp";
 
 export type AssignMemberToEventInput = {
   eventId: string;
@@ -22,6 +25,7 @@ export class AssignMemberToEventUseCase {
     private readonly prisma: PrismaClient,
     private readonly socketServer?: ISocketServer,
     private readonly createNotification?: CreateNotificationUseCase,
+    private readonly whatsApp?: IWhatsAppService,
   ) {}
 
   async execute(input: AssignMemberToEventInput): Promise<AssignMemberToEventOutput> {
@@ -78,6 +82,20 @@ export class AssignMemberToEventUseCase {
         if (result?.created) {
           setImmediate(() => {
             this.socketServer?.emitToUser(memberUserId, "notification", { type: "MEMBRO_ESCALADO", eventId });
+          });
+        }
+
+        if (result?.created && member.phone) {
+          const phone = member.phone;
+          setImmediate(async () => {
+            const r = await this.whatsApp!.sendMessage(
+              phone,
+              `Oi ${member.fullName}! Você foi escalado para *${ministry.name}* no evento *${event.title ?? event.type}* em ${event.startsAt.toLocaleDateString("pt-BR")}.`,
+              "default",
+            );
+            if (!r.ok && r.code !== "NOT_CONFIGURED") {
+              createLogger("assign-member-event").warn({ operation: "whatsapp_send", resultCode: r.code, phone: maskPhone(phone) }, "WhatsApp message was not accepted");
+            }
           });
         }
       }
