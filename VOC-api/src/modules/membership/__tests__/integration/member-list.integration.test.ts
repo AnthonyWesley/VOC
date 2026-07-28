@@ -313,7 +313,7 @@ describe("0H.3A — Member list", () => {
 
       // Member 4 is already assigned
       await prisma.eventAssignment.create({
-        data: { eventId, ministryId, memberId: memberIds[4] },
+        data: { id: generateId(), eventId, ministryId, memberId: memberIds[4] },
       });
     });
 

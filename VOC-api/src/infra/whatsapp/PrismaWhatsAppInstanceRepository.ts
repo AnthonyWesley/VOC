@@ -1,4 +1,5 @@
 import { PrismaClient, WhatsAppInstance } from "@prisma/client";
+import { generateId } from "../../shared/utils/generateId";
 import { WhatsAppInstanceRepository, CreateWhatsAppInstanceData } from "./WhatsAppInstanceRepository";
 
 export class PrismaWhatsAppInstanceRepository implements WhatsAppInstanceRepository {
@@ -27,7 +28,7 @@ export class PrismaWhatsAppInstanceRepository implements WhatsAppInstanceReposit
   }
 
   async create(data: CreateWhatsAppInstanceData): Promise<WhatsAppInstance> {
-    return this.prisma.whatsAppInstance.create({ data });
+    return this.prisma.whatsAppInstance.create({ data: { ...data, id: generateId() } });
   }
 
   async deleteByInstanceName(instanceName: string): Promise<void> {

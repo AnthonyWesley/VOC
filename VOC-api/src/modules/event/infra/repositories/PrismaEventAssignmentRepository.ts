@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { generateId } from "../../../../shared/utils/generateId";
 import {
   IEventAssignmentRepository,
   CreateEventAssignmentInput,
@@ -13,6 +14,7 @@ export class PrismaEventAssignmentRepository implements IEventAssignmentReposito
   async create(input: CreateEventAssignmentInput): Promise<EventAssignmentRecord> {
     return this.db.eventAssignment.create({
       data: {
+        id: generateId(),
         eventId: input.eventId,
         memberId: input.memberId,
         ministryId: input.ministryId,

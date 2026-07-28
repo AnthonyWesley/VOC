@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { generateId } from "../../../../shared/utils/generateId";
 
 export type RefreshTokenProps = {
   id: string;
@@ -13,7 +13,7 @@ export class RefreshToken {
 
   static create(userId: string, tokenHash: string, expiresAt: Date) {
     return new RefreshToken({
-      id: randomUUID(),
+      id: generateId(),
       userId,
       tokenHash,
       expiresAt,

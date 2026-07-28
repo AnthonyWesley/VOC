@@ -81,7 +81,7 @@ describe("0H.2C.2 — Monthly report", () => {
       },
     });
     await prisma.eventAttendance.create({
-      data: { eventId: eventIds.summaryAug1, membersCount: 30, visitorsCount: 5 },
+      data: { id: generateId(), eventId: eventIds.summaryAug1, membersCount: 30, visitorsCount: 5 },
     });
 
     await prisma.event.create({
@@ -96,7 +96,7 @@ describe("0H.2C.2 — Monthly report", () => {
       },
     });
     await prisma.eventAttendance.create({
-      data: { eventId: eventIds.summaryAug2, membersCount: 20, visitorsCount: 3 },
+      data: { id: generateId(), eventId: eventIds.summaryAug2, membersCount: 20, visitorsCount: 3 },
     });
 
     // SUMMARY event without attendance (should be included with 0)

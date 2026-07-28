@@ -1,3 +1,4 @@
+import { generateId } from "../../../../shared/utils/generateId";
 import {
   AttendanceMode,
   EventStatus,
@@ -555,6 +556,7 @@ export class PrismaEventRepository implements IEventRepository {
             updatedAt: new Date(),
           },
           create: {
+            id: generateId(),
             eventId: event.id,
             membersCount: attendance.membersCount,
             visitorsCount: attendance.visitorsCount,
@@ -597,7 +599,7 @@ export class PrismaEventRepository implements IEventRepository {
     ministryId: string,
   ): Promise<void> {
     await this.prisma.eventAssignment.create({
-      data: { eventId, memberId, ministryId, assignedAt: new Date() },
+      data: { id: generateId(), eventId, memberId, ministryId, assignedAt: new Date() },
     });
   }
 

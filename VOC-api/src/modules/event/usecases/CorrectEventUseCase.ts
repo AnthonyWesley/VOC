@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { generateId } from "../../../shared/utils/generateId";
 import { NotFoundError } from "../../../shared/errors/NotFoundError";
 import { ConflictError } from "../../../shared/errors/ConflictError";
 import { ValidationError } from "../../../shared/errors/ValidationError";
@@ -67,7 +68,7 @@ export class CorrectEventUseCase {
           await tx.eventAttendance.upsert({
             where: { eventId: event.id },
             update: { membersCount: input.membersCount },
-            create: { eventId: event.id, membersCount: input.membersCount, visitorsCount: input.visitorsCount ?? 0 },
+            create: { id: generateId(), eventId: event.id, membersCount: input.membersCount, visitorsCount: input.visitorsCount ?? 0 },
           });
         }
         if (input.visitorsCount !== undefined) {
@@ -76,7 +77,7 @@ export class CorrectEventUseCase {
           await tx.eventAttendance.upsert({
             where: { eventId: event.id },
             update: { visitorsCount: input.visitorsCount },
-            create: { eventId: event.id, visitorsCount: input.visitorsCount, membersCount: input.membersCount ?? 0 },
+            create: { id: generateId(), eventId: event.id, visitorsCount: input.visitorsCount, membersCount: input.membersCount ?? 0 },
           });
         }
       }
@@ -87,6 +88,7 @@ export class CorrectEventUseCase {
 
       await tx.eventCorrection.create({
         data: {
+          id: generateId(),
           eventId: event.id,
           correctedById: input.correctedById,
           reason: input.reason.trim(),

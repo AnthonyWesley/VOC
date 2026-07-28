@@ -12,7 +12,7 @@ datasource db {
 ///////////////////////////////////////////////////////
 
 model User {
-  id            String     @id @default(uuid())
+  id            String     @id
   email         String     @unique
   passwordHash  String
   isActive      Boolean    @default(true)
@@ -47,7 +47,7 @@ model User {
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid())
+  id        String   @id
   userId    String
   tokenHash String   @unique
   expiresAt DateTime
@@ -68,7 +68,7 @@ enum NotificationType {
 }
 
 model Notification {
-  id               String           @id @default(uuid())
+  id               String           @id
   userId           String
   type             NotificationType
   title            String
@@ -87,7 +87,7 @@ model Notification {
 }
 
 model Role {
-  id          String     @id @default(uuid())
+  id          String     @id
   name        String     @unique
   level       Int
   description String?
@@ -111,7 +111,7 @@ model UserRole {
 ///////////////////////////////////////////////////////
 
 model Member {
-  id                 String   @id @default(uuid())
+  id                 String   @id
 
   fullName           String
   normalizedFullName String
@@ -165,7 +165,7 @@ enum MemberStatus {
 ///////////////////////////////////////////////////////
 
 model Ministry {
-  id           String   @id @default(uuid())
+  id           String   @id
   name         String   @unique
   description  String?
   leaderId     String?
@@ -203,7 +203,7 @@ model EventMember {
 }
 
 model Category {
-  id    String @id @default(uuid())
+  id    String @id
   name  String @unique
   type  TransactionDirection // optional, para diferenciar INCOME / OUTCOME
   records FinancialRecord[]
@@ -216,7 +216,7 @@ model Category {
 ///////////////////////////////////////////////////////
 
 model EventAttendance {
-  id           String   @id @default(uuid())
+  id           String   @id
 
   eventId    String   @unique
   event      Event  @relation(fields: [eventId], references: [id])
@@ -229,7 +229,7 @@ model EventAttendance {
 }
 
 model EventAssignment {
-  id         String @id @default(uuid())
+  id         String @id
   eventId    String
   memberId   String
   ministryId String
@@ -268,7 +268,7 @@ enum EventParticipantType {
 }
 
 model Event {
-  id               String        @id @default(uuid())
+  id               String        @id
 
   title            String?
   type             EventType
@@ -319,7 +319,7 @@ model Event {
 }
 
 model EventCorrection {
-  id            String   @id @default(uuid())
+  id            String   @id
   eventId       String
   event         Event    @relation(fields: [eventId], references: [id], onDelete: Restrict)
   correctedById String
@@ -351,7 +351,7 @@ enum TransactionStatus {
 }
 
 model FinancialRecord {
-  id              String   @id @default(uuid())
+  id              String   @id
 
   // 🔒 Dados financeiros (imutáveis)
   amount          Decimal
@@ -430,7 +430,7 @@ enum PostVisibility {
 }
 
 model Post {
-  id          String          @id @default(uuid())
+  id          String          @id
   title       String
   content     String
   imageUrl    String?
@@ -500,7 +500,7 @@ model SiteContentSettings {
 }
 
 model WhatsAppInstance {
-  id          String   @id @default(uuid())
+  id          String   @id
   instanceName String  @unique
   number      String?
   userId      String?
