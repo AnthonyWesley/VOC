@@ -64,6 +64,7 @@ enum NotificationType {
   MEMBRO_REMOVIDO
   EVENTO_CRIADO
   MEMBRO_ESCALADO
+  MEMBRO_DESVINCULADO
 }
 
 model Notification {

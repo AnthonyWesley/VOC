@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { IMinistryRepository } from "../domain/repositories/IMinistryRepository";
 
 export type ListMinistriesOutput = {
   id: string;
@@ -11,24 +11,9 @@ export type ListMinistriesOutput = {
 };
 
 export class ListMinistriesUseCase {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly ministryRepository: IMinistryRepository) {}
 
   async execute(): Promise<ListMinistriesOutput[]> {
-    const ministries = await this.prisma.ministry.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        _count: { select: { members: true } },
-      },
-    });
-
-    return ministries.map((m) => ({
-      id: m.id,
-      name: m.name,
-      description: m.description,
-      leaderId: m.leaderId ?? null,
-      memberCount: m._count.members,
-      createdAt: m.createdAt,
-      updatedAt: m.updatedAt,
-    }));
+    return this.ministryRepository.findAllWithDetails();
   }
 }

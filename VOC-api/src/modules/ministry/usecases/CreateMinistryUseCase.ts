@@ -1,11 +1,15 @@
 import { IMinistryRepository } from "../domain/repositories/IMinistryRepository";
 
 import { Ministry } from "../domain/entities/Ministry";
-import { ValidationError } from "../../../shared/errors/ValidationError";
+import { ConflictError } from "../../../shared/errors/ConflictError";
+import { isPrismaUniqueViolation } from "../../../shared/utils/isPrismaUniqueViolation";
+import { createLogger } from "../../../shared/logger/logger";
+
+const logger = createLogger("create-ministry");
 
 export type CreateMinistryInput = {
   name: string;
-  description: string;
+  description?: string | null;
 };
 
 export type CreateMinistryOutput = {
@@ -18,20 +22,20 @@ export class CreateMinistryUseCase {
   async execute(input: CreateMinistryInput): Promise<CreateMinistryOutput> {
     const { name, description } = input;
 
-    if (!name) {
-      throw new ValidationError("MISSING_FULL-NAME");
-    }
-
-    if (!description) {
-      throw new ValidationError("MISSING_description");
-    }
-
     const ministry = Ministry.create({
-      description,
+      description: description ?? undefined,
       name,
     });
 
-    await this.memberRepository.save(ministry);
+    try {
+      await this.memberRepository.save(ministry);
+    } catch (error: unknown) {
+      if (isPrismaUniqueViolation(error)) {
+        logger.warn({ name, error }, "Duplicate ministry name");
+        throw new ConflictError("MINISTRY_NAME_CONFLICT", undefined, "Já existe um ministério com este nome");
+      }
+      throw error;
+    }
 
     return {
       id: ministry.id,

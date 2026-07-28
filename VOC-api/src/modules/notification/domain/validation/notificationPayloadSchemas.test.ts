@@ -3,10 +3,15 @@ import {
   validateNotificationPayload,
   notificationPayloadSchemas,
 } from "../../domain/validation/notificationPayloadSchemas";
+import { generateId } from "../../../../shared/utils/generateId";
+
+const ULID_EVENT = generateId();
+const ULID_MINISTRY = generateId();
+const ULID_MEMBER = generateId();
 
 describe("notificationPayloadSchemas", () => {
   describe("EVENTO_CRIADO", () => {
-    const valid = { eventId: "550e8400-e29b-41d4-a716-446655440000", eventTitle: "Culto", eventType: "SUNDAY_SERVICE", needsScale: false };
+    const valid = { eventId: ULID_EVENT, eventTitle: "Culto", eventType: "SUNDAY_SERVICE", needsScale: false };
 
     it("accepts valid payload", () => {
       const result = validateNotificationPayload("EVENTO_CRIADO", valid);
@@ -28,8 +33,8 @@ describe("notificationPayloadSchemas", () => {
 
   describe("MEMBRO_ESCALADO", () => {
     const valid = {
-      eventId: "550e8400-e29b-41d4-a716-446655440000",
-      ministryId: "550e8400-e29b-41d4-a716-446655440001",
+      eventId: ULID_EVENT,
+      ministryId: ULID_MINISTRY,
       ministryName: "Louvor",
       eventTitle: "Culto de Domingo",
       eventDate: "2026-07-26T10:00:00.000Z",
@@ -46,7 +51,7 @@ describe("notificationPayloadSchemas", () => {
   });
 
   describe("MEMBER_AUSENTE", () => {
-    const valid = { memberId: "550e8400-e29b-41d4-a716-446655440000", memberName: "João", eventType: "HOUSE_SERVICE", daysSinceLastEvent: 45 };
+    const valid = { memberId: ULID_MEMBER, memberName: "João", eventType: "HOUSE_SERVICE", daysSinceLastEvent: 45 };
 
     it("accepts valid payload", () => {
       const result = validateNotificationPayload("MEMBER_AUSENTE", valid);
@@ -59,7 +64,7 @@ describe("notificationPayloadSchemas", () => {
   });
 
   describe("MEMBRO_VINCULADO", () => {
-    const valid = { memberId: "550e8400-e29b-41d4-a716-446655440000", memberName: "Maria" };
+    const valid = { memberId: ULID_MEMBER, memberName: "Maria" };
 
     it("accepts valid payload", () => {
       const result = validateNotificationPayload("MEMBRO_VINCULADO", valid);
@@ -67,14 +72,14 @@ describe("notificationPayloadSchemas", () => {
     });
 
     it("rejects empty name", () => {
-      expect(() => validateNotificationPayload("MEMBRO_VINCULADO", { memberId: valid.memberId, memberName: "" })).toThrow();
+      expect(() => validateNotificationPayload("MEMBRO_VINCULADO", { memberId: ULID_MEMBER, memberName: "" })).toThrow();
     });
   });
 
   describe("MEMBRO_REMOVIDO", () => {
     const valid = {
-      eventId: "550e8400-e29b-41d4-a716-446655440000",
-      memberId: "550e8400-e29b-41d4-a716-446655440001",
+      eventId: ULID_EVENT,
+      memberId: ULID_MEMBER,
       ministryName: "Louvor",
       eventTitle: "Culto",
       eventDate: "2026-07-26",
@@ -86,16 +91,38 @@ describe("notificationPayloadSchemas", () => {
     });
   });
 
+  describe("MEMBRO_DESVINCULADO", () => {
+    const valid = {
+      memberId: ULID_MEMBER,
+      memberName: "Maria",
+      ministryId: ULID_MINISTRY,
+      ministryName: "Louvor",
+    };
+
+    it("accepts valid payload", () => {
+      const result = validateNotificationPayload("MEMBRO_DESVINCULADO", valid);
+      expect(result.ministryName).toBe("Louvor");
+    });
+
+    it("rejects missing memberId", () => {
+      expect(() => validateNotificationPayload("MEMBRO_DESVINCULADO", { ...valid, memberId: undefined })).toThrow();
+    });
+
+    it("rejects extra fields (strict)", () => {
+      expect(() => validateNotificationPayload("MEMBRO_DESVINCULADO", { ...valid, extraField: true })).toThrow();
+    });
+  });
+
   it("throws for unknown type", () => {
     expect(() => validateNotificationPayload("ESCALA_PENDENTE" as any, {})).toThrow();
   });
 
   it("throws for unknown version", () => {
-    expect(() => validateNotificationPayload("EVENTO_CRIADO", { eventId: "550e8400-e29b-41d4-a716-446655440000", eventTitle: "Test", eventType: "SUNDAY_SERVICE", needsScale: false }, 99)).toThrow();
+    expect(() => validateNotificationPayload("EVENTO_CRIADO", { eventId: ULID_EVENT, eventTitle: "Test", eventType: "SUNDAY_SERVICE", needsScale: false }, 99)).toThrow();
   });
 
   it("all schemas are registered and strict", () => {
     const types = Object.keys(notificationPayloadSchemas);
-    expect(types).toEqual(["MEMBER_AUSENTE", "MEMBRO_VINCULADO", "MEMBRO_REMOVIDO", "EVENTO_CRIADO", "MEMBRO_ESCALADO"]);
+    expect(types).toEqual(["MEMBER_AUSENTE", "MEMBRO_VINCULADO", "MEMBRO_REMOVIDO", "EVENTO_CRIADO", "MEMBRO_ESCALADO", "MEMBRO_DESVINCULADO"]);
   });
 });

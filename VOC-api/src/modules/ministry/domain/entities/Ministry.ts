@@ -56,4 +56,17 @@ export class Ministry {
   public get updatedAt(): Date {
     return this.props.updatedAt;
   }
+
+  public update(props: { name?: string; description?: string | null }): void {
+    if (props.name !== undefined) {
+      if (!props.name?.trim()) {
+        throw new Error("Name is required");
+      }
+      this.props.name = props.name.trim();
+    }
+    if (props.description !== undefined) {
+      this.props.description = props.description;
+    }
+    this.props.updatedAt = new Date();
+  }
 }

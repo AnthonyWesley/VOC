@@ -1,9 +1,8 @@
-// identity/infra/repositories/PrismaUserRepository.ts
-
 import { PrismaClient } from "@prisma/client";
 import { Ministry } from "../entities/Ministry";
-import { IMinistryRepository } from "./IMinistryRepository";
+import { IMinistryRepository, MemberMinistryRecord } from "./IMinistryRepository";
 import { DetailedMinistryDTO } from "../../usecases/GetMinistryDetailedUseCase";
+import { ListMinistriesOutput } from "../../usecases/ListMinistriesUseCase";
 
 export class PrismaMinistryRepository implements IMinistryRepository {
   constructor(private prisma: PrismaClient) {}
@@ -73,11 +72,31 @@ export class PrismaMinistryRepository implements IMinistryRepository {
     );
   }
 
+  async findAllWithDetails(): Promise<ListMinistriesOutput[]> {
+    const ministries = await this.prisma.ministry.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        _count: { select: { members: true } },
+      },
+    });
+
+    return ministries.map((m) => ({
+      id: m.id,
+      name: m.name,
+      description: m.description,
+      leaderId: m.leaderId ?? null,
+      memberCount: m._count.members,
+      createdAt: m.createdAt,
+      updatedAt: m.updatedAt,
+    }));
+  }
+
   async assignMember(ministryId: string, memberId: string): Promise<void> {
     await this.prisma.memberMinistry.create({
       data: { ministryId, memberId, joinedAt: new Date() },
     });
   }
+
   async removeMember(ministryId: string, memberId: string): Promise<void> {
     await this.prisma.memberMinistry.delete({
       where: {
@@ -87,6 +106,20 @@ export class PrismaMinistryRepository implements IMinistryRepository {
         },
       },
     });
+  }
+
+  async findMemberMinistry(ministryId: string, memberId: string): Promise<MemberMinistryRecord | null> {
+    const data = await this.prisma.memberMinistry.findUnique({
+      where: {
+        memberId_ministryId: { ministryId, memberId },
+      },
+    });
+    if (!data) return null;
+    return {
+      memberId: data.memberId,
+      ministryId: data.ministryId,
+      joinedAt: data.joinedAt,
+    };
   }
 
   async save(ministry: Ministry): Promise<void> {

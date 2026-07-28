@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { ulidSchema } from "../../../../shared/utils/ulidSchema";
 
 export const notificationPayloadSchemas = {
   MEMBER_AUSENTE: {
     1: z.object({
-      memberId: z.string().uuid(),
+      memberId: ulidSchema,
       memberName: z.string().min(1),
       eventType: z.string(),
       daysSinceLastEvent: z.number().int().nonnegative(),
@@ -11,14 +12,14 @@ export const notificationPayloadSchemas = {
   },
   MEMBRO_VINCULADO: {
     1: z.object({
-      memberId: z.string().uuid(),
+      memberId: ulidSchema,
       memberName: z.string().min(1),
     }).strict(),
   },
   MEMBRO_REMOVIDO: {
     1: z.object({
-      eventId: z.string().uuid(),
-      memberId: z.string().uuid(),
+      eventId: ulidSchema,
+      memberId: ulidSchema,
       ministryName: z.string().min(1),
       eventTitle: z.string(),
       eventDate: z.string(),
@@ -26,7 +27,7 @@ export const notificationPayloadSchemas = {
   },
   EVENTO_CRIADO: {
     1: z.object({
-      eventId: z.string().uuid(),
+      eventId: ulidSchema,
       eventTitle: z.string(),
       eventType: z.string(),
       needsScale: z.boolean(),
@@ -34,11 +35,19 @@ export const notificationPayloadSchemas = {
   },
   MEMBRO_ESCALADO: {
     1: z.object({
-      eventId: z.string().uuid(),
-      ministryId: z.string().uuid(),
+      eventId: ulidSchema,
+      ministryId: ulidSchema,
       ministryName: z.string().min(1),
       eventTitle: z.string(),
       eventDate: z.string().datetime(),
+    }).strict(),
+  },
+  MEMBRO_DESVINCULADO: {
+    1: z.object({
+      memberId: ulidSchema,
+      memberName: z.string().min(1),
+      ministryId: ulidSchema,
+      ministryName: z.string().min(1),
     }).strict(),
   },
 } as const;

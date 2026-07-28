@@ -7,6 +7,12 @@ import { AssignMemberToMinistryUseCase } from "../../usecases/AssignMemberToMini
 import { RemoveMemberFromMinistryUseCase } from "../../usecases/RemoveMemberFromMinistryUseCase";
 import { ListMinistriesUseCase } from "../../usecases/ListMinistriesUseCase";
 import { GetMinistryDetailedUseCase } from "../../usecases/GetMinistryDetailedUseCase";
+import {
+  ministryParamsSchema,
+  ministryMemberBodySchema,
+  createMinistryHttpSchema,
+  updateMinistryHttpSchema,
+} from "../../domain/validation/ministrySchemas";
 
 export class MinistryController {
   constructor(
@@ -20,32 +26,28 @@ export class MinistryController {
   ) {}
 
   async create(request: Request, response: Response): Promise<Response> {
-    const { name, description } = request.body;
+    const body = createMinistryHttpSchema.parse(request.body);
 
-    const result = await this.createMinistryUseCase.execute({
-      name,
-      description,
-    });
+    const result = await this.createMinistryUseCase.execute(body);
 
     return response.status(201).json(result);
   }
 
   async update(request: Request, response: Response): Promise<Response> {
-    const ministryId = String(request.params.ministryId);
-    const { name, description } = request.body;
+    const { ministryId } = ministryParamsSchema.parse(request.params);
+    const body = updateMinistryHttpSchema.parse(request.body);
 
     const result = await this.updateMinistryUseCase.execute({
       ministryId,
-      name,
-      description,
+      ...body,
     });
 
     return response.status(200).json(result);
   }
 
   async assignMember(request: Request, response: Response): Promise<Response> {
-    const ministryId = String(request.params.ministryId);
-    const { memberId } = request.body;
+    const { ministryId } = ministryParamsSchema.parse(request.params);
+    const { memberId } = ministryMemberBodySchema.parse(request.body);
 
     const result = await this.assignMemberToMinistryUseCase.execute({
       ministryId,
@@ -58,8 +60,8 @@ export class MinistryController {
   }
 
   async removeMember(request: Request, response: Response): Promise<Response> {
-    const ministryId = String(request.params.ministryId);
-    const { memberId } = request.body;
+    const { ministryId } = ministryParamsSchema.parse(request.params);
+    const { memberId } = ministryMemberBodySchema.parse(request.body);
 
     const result = await this.removeMemberFromMinistryUseCase.execute({
       ministryId,
@@ -72,11 +74,15 @@ export class MinistryController {
   }
 
   async get(request: Request, response: Response): Promise<Response> {
-    const ministryId = String(request.params.ministryId);
+    const { ministryId } = ministryParamsSchema.parse(request.params);
 
     const result = await this.getDetailedMinistryUseCase.execute({
       ministryId,
     });
+
+    if (!result) {
+      return response.status(404).json({ code: "MINISTRY_NOT_FOUND", message: "Ministério não encontrado" });
+    }
 
     return response.status(200).json(result);
   }
@@ -87,7 +93,7 @@ export class MinistryController {
   }
 
   async delete(request: Request, response: Response): Promise<Response> {
-    const ministryId = String(request.params.ministryId);
+    const { ministryId } = ministryParamsSchema.parse(request.params);
 
     await this.deleteMinistryUseCase.execute({ ministryId });
 

@@ -1,7 +1,16 @@
 import { PrismaClient } from "@prisma/client";
-import { IMinistryRepository } from "../domain/repositories/IMinistryRepository";
-import { ValidationError } from "../../../shared/errors/ValidationError";
+import { IMinistryMembershipTransaction } from "../domain/transactions/IMinistryMembershipTransaction";
+import { NotFoundError } from "../../../shared/errors/NotFoundError";
 import { ForbiddenError } from "../../../shared/errors/ForbiddenError";
+import { CreateNotificationUseCase } from "../../notification/usecases/CreateNotificationUseCase";
+import { IRealtimeNotificationPublisher } from "../../../infra/socket/RealtimeNotificationPublisher";
+import { IWhatsAppService } from "../../../infra/whatsapp/IWhatsAppService";
+import { createLogger } from "../../../shared/logger/logger";
+import { maskPhone } from "../../../shared/types/whatsapp";
+
+type NotificationResult = Awaited<ReturnType<CreateNotificationUseCase["execute"]>>;
+
+const logger = createLogger("remove-member-ministry");
 
 export type RemoveMemberFromMinistryInput = {
   ministryId: string;
@@ -16,8 +25,11 @@ export type RemoveMemberFromMinistryOutput = {
 
 export class RemoveMemberFromMinistryUseCase {
   constructor(
-    private readonly memberRepository: IMinistryRepository,
+    private readonly transaction: IMinistryMembershipTransaction,
     private readonly prisma: PrismaClient,
+    private readonly createNotification: CreateNotificationUseCase,
+    private readonly realtimePublisher: IRealtimeNotificationPublisher,
+    private readonly whatsApp: IWhatsAppService,
   ) {}
 
   async execute(
@@ -25,37 +37,96 @@ export class RemoveMemberFromMinistryUseCase {
   ): Promise<RemoveMemberFromMinistryOutput> {
     const { ministryId, memberId, userId, userLevel } = input;
 
-    if (!ministryId) {
-      throw new ValidationError("MISSING_MINISTRY_ID");
-    }
+    const [ministry, member, user] = await Promise.all([
+      this.prisma.ministry.findUnique({
+        where: { id: ministryId },
+        select: { id: true, name: true, leaderId: true },
+      }),
+      this.prisma.member.findUnique({
+        where: { id: memberId },
+        select: { id: true, fullName: true, userId: true, phone: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        include: { member: { select: { id: true } } },
+      }),
+    ]);
 
-    if (!memberId) {
-      throw new ValidationError("MISSING_MEMBER_ID");
-    }
-
-    const ministry = await this.prisma.ministry.findUnique({
-      where: { id: ministryId },
-      select: { leaderId: true },
-    });
-
-    if (!ministry) {
-      throw new ValidationError("MINISTRY_NOT_FOUND");
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { member: { select: { id: true } } },
-    });
+    if (!ministry) throw new NotFoundError("MINISTRY_NOT_FOUND");
+    if (!member) throw new NotFoundError("MEMBER_NOT_FOUND");
 
     const isLeader = user?.member?.id && user.member.id === ministry.leaderId;
     if (!isLeader && userLevel < 80) {
       throw new ForbiddenError("NOT_MINISTRY_LEADER", undefined, "Você não é líder deste ministério");
     }
 
-    await this.memberRepository.removeMember(ministryId, memberId);
+    const existing = await this.prisma.memberMinistry.findUnique({
+      where: { memberId_ministryId: { memberId, ministryId } },
+    });
 
-    return {
-      id: memberId,
-    };
+    if (!existing) {
+      return { id: memberId };
+    }
+
+    let notificationResult: NotificationResult = { notification: null as any, created: false };
+
+    await this.transaction.execute<void>(async ({ memberships, notifications }) => {
+      await memberships.delete(memberId, ministryId);
+
+      if (member.userId) {
+        const result = await this.createNotification.execute(
+          {
+            userId: member.userId,
+            type: "MEMBRO_DESVINCULADO",
+            title: "Você foi desvinculado de um ministério",
+            message: `Você foi desvinculado do ministério ${ministry.name}.`,
+            payload: {
+              memberId,
+              memberName: member.fullName,
+              ministryId,
+              ministryName: ministry.name,
+            },
+            deduplicationKey: `v1:membro-desvinculado:${memberId}:${ministryId}`,
+          },
+          {
+            repository: notifications,
+            recoverDeduplicationConflict: false,
+          },
+        );
+      }
+    });
+
+    if (member.userId && notificationResult.created) {
+      this.realtimePublisher.publish(member.userId, notificationResult.notification);
+
+      if (member.phone) {
+        this.dispatchWhatsAppBestEffort({
+          phone: member.phone,
+          message: `Olá ${member.fullName}! Você foi desvinculado do ministério *${ministry.name}*.`,
+        });
+      }
+    }
+
+    return { id: memberId };
+  }
+
+  private dispatchWhatsAppBestEffort(input: { phone: string; message: string }): void {
+    try {
+      void this.whatsApp
+        .sendMessage(input.phone, input.message, "default")
+        .then((result) => {
+          if (!result.ok && result.code !== "NOT_CONFIGURED") {
+            logger.warn(
+              { operation: "ministry_removal_whatsapp", errorCode: result.code, retryable: result.retryable, phone: maskPhone(input.phone) },
+              "WhatsApp removal was not accepted",
+            );
+          }
+        })
+        .catch((error: unknown) => {
+          logger.error({ operation: "ministry_removal_whatsapp", error }, "Unexpected WhatsApp removal error");
+        });
+    } catch (error: unknown) {
+      logger.error({ operation: "ministry_removal_whatsapp", error }, "WhatsApp removal dispatch failed");
+    }
   }
 }

@@ -3,9 +3,12 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: [
+      "src/modules/event/__tests__/integration/**/*.test.ts",
       "src/modules/financialRecord/__tests__/integration/**/*.test.ts",
       "src/modules/post/__tests__/integration/**/*.test.ts",
       "src/modules/notification/__tests__/integration/**/*.test.ts",
+      "src/modules/membership/__tests__/integration/**/*.test.ts",
+      "src/modules/ministry/__tests__/integration/**/*.test.ts",
       "src/infra/jobs/__tests__/integration/**/*.test.ts",
       "src/modules/communication/__tests__/integration/**/*.test.ts",
       "src/shared/health/__tests__/integration/**/*.test.ts",
