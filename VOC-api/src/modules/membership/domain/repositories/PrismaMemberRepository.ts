@@ -12,9 +12,49 @@ import { DetailedMemberDTO } from "../../usecases/GetMemberDetailedUseCase";
 export class PrismaMemberRepository implements IMemberRepository {
   constructor(private prisma: PrismaClient) {}
 
+  private rehydrate(data: {
+    id: string;
+    fullName: string;
+    normalizedFullName: string;
+    nickname: string | null;
+    normalizedNickname: string | null;
+    birthDate: Date;
+    phone: string | null;
+    postcode: string | null;
+    normalizedPostcode: string | null;
+    address: string | null;
+    baptismDate: Date | null;
+    churchJoinDate: Date;
+    status: string;
+    userId: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    deletedAt: Date | null;
+  }): Member {
+    return Member.rehydrate({
+      id: data.id,
+      fullName: data.fullName,
+      normalizedFullName: data.normalizedFullName,
+      nickname: data.nickname ?? null,
+      normalizedNickname: data.normalizedNickname ?? null,
+      birthDate: data.birthDate,
+      phone: data.phone ?? null,
+      postcode: data.postcode ?? null,
+      normalizedPostcode: data.normalizedPostcode ?? null,
+      address: data.address ?? null,
+      baptismDate: data.baptismDate ?? null,
+      churchJoinDate: data.churchJoinDate,
+      status: data.status as any,
+      userId: data.userId ?? null,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      deletedAt: data.deletedAt ?? null,
+    });
+  }
+
   async findDetailedMember(id: string): Promise<DetailedMemberDTO | null> {
-    const data = await this.prisma.member.findUnique({
-      where: { id },
+    const data = await this.prisma.member.findFirst({
+      where: { id, deletedAt: null },
       include: {
         ministries: {
           include: {
@@ -57,63 +97,27 @@ export class PrismaMemberRepository implements IMemberRepository {
   }
 
   async findById(id: string): Promise<Member | null> {
-    const data = await this.prisma.member.findUnique({
-      where: { id },
-    });
+    const data = await this.prisma.member.findFirst({ where: { id, deletedAt: null } });
+    return data ? this.rehydrate(data) : null;
+  }
 
-    if (!data) return null;
-
-    return Member.rehydrate({
-      id: data.id,
-      fullName: data.fullName,
-      normalizedFullName: data.normalizedFullName,
-      nickname: data.nickname ?? null,
-      normalizedNickname: data.normalizedNickname ?? null,
-      birthDate: data.birthDate,
-      phone: data.phone ?? null,
-      postcode: data.postcode ?? null,
-      normalizedPostcode: data.normalizedPostcode ?? null,
-      address: data.address ?? null,
-      baptismDate: data.baptismDate ?? null,
-      churchJoinDate: data.churchJoinDate,
-      status: data.status,
-      userId: data.userId ?? null,
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt,
-      deletedAt: data.deletedAt ?? null,
-    });
+  async findByIdIncludingDeleted(id: string): Promise<Member | null> {
+    const data = await this.prisma.member.findUnique({ where: { id } });
+    return data ? this.rehydrate(data) : null;
   }
 
   async findByUniqueness(normalizedFullName: string, birthDate: Date): Promise<Member | null> {
     const data = await this.prisma.member.findFirst({
-      where: {
-        normalizedFullName,
-        birthDate,
-        deletedAt: null,
-      },
+      where: { normalizedFullName, birthDate, deletedAt: null },
     });
+    return data ? this.rehydrate(data) : null;
+  }
 
-    if (!data) return null;
-
-    return Member.rehydrate({
-      id: data.id,
-      fullName: data.fullName,
-      normalizedFullName: data.normalizedFullName,
-      nickname: data.nickname ?? null,
-      normalizedNickname: data.normalizedNickname ?? null,
-      birthDate: data.birthDate,
-      phone: data.phone ?? null,
-      postcode: data.postcode ?? null,
-      normalizedPostcode: data.normalizedPostcode ?? null,
-      address: data.address ?? null,
-      baptismDate: data.baptismDate ?? null,
-      churchJoinDate: data.churchJoinDate,
-      status: data.status,
-      userId: data.userId ?? null,
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt,
-      deletedAt: data.deletedAt ?? null,
+  async findByUniquenessIncludingDeleted(normalizedFullName: string, birthDate: Date): Promise<Member | null> {
+    const data = await this.prisma.member.findFirst({
+      where: { normalizedFullName, birthDate },
     });
+    return data ? this.rehydrate(data) : null;
   }
 
   async findAllMembers(params: BaseListFilters): Promise<AvailableMembers> {

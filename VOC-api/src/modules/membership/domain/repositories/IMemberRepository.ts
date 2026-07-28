@@ -19,6 +19,8 @@ export interface IMemberRepository {
   findDetailedMember(id: string): Promise<DetailedMemberDTO | null>;
   findById(id: string): Promise<Member | null>;
   findByUniqueness(normalizedFullName: string, birthDate: Date): Promise<Member | null>;
+  findByUniquenessIncludingDeleted(normalizedFullName: string, birthDate: Date): Promise<Member | null>;
+  findByIdIncludingDeleted(id: string): Promise<Member | null>;
   save(user: Member): Promise<void>;
   delete(id: string): Promise<void>;
 

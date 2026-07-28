@@ -9,10 +9,14 @@ export class DeleteMemberUseCase {
   constructor(private readonly memberRepository: IMemberRepository) {}
 
   async execute(input: DeleteMemberInput): Promise<void> {
-    const member = await this.memberRepository.findById(input.memberId);
+    const member = await this.memberRepository.findByIdIncludingDeleted(input.memberId);
 
     if (!member) {
       throw new NotFoundError("Member not found");
+    }
+
+    if (member.isDeleted) {
+      return;
     }
 
     member.delete();
