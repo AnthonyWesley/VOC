@@ -8,6 +8,7 @@ function mockWhatsApp() {
 
 function makeSut(publisher: IRealtimeNotificationPublisher, createNotificationResult?: { created: boolean; notification: any } | "UNDEFINED") {
   const repo = {
+    findById: vi.fn().mockResolvedValue({ id: "event-1", status: "SCHEDULED", isDeleted: false }),
     removeAssignment: vi.fn(),
     removeMember: vi.fn(),
   };

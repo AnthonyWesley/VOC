@@ -25,6 +25,8 @@ describe("0H.2B — Event attendance (no ministry)", () => {
   const finishedEventId = generateId();
   const cancelledEventId = generateId();
   const deletedEventId = generateId();
+  const cancelledRmMemberId = generateId();
+  const deletedRmMemberId = generateId();
 
   beforeAll(async () => {
     prisma = new PrismaClient({ datasourceUrl: INTEGRATION_DATABASE_URL });
@@ -65,6 +67,20 @@ describe("0H.2B — Event attendance (no ministry)", () => {
         { id: finishedEventId, type: "SUNDAY_SERVICE", status: "FINISHED", startsAt: new Date("2026-07-26T08:00:00Z"), endsAt: new Date("2026-07-26T10:00:00Z"), attendanceMode: "SUMMARY", createdAt: new Date(), updatedAt: new Date() },
         { id: cancelledEventId, type: "SUNDAY_SERVICE", status: "CANCELLED", startsAt: new Date("2026-07-26T08:00:00Z"), attendanceMode: "SUMMARY", createdAt: new Date(), updatedAt: new Date(), cancelledAt: new Date(), cancelledById: leaderId, cancelReason: "Test" },
         { id: deletedEventId, type: "SUNDAY_SERVICE", status: "SCHEDULED", startsAt: new Date("2026-07-26T08:00:00Z"), attendanceMode: "SUMMARY", createdAt: new Date(), updatedAt: new Date(), deletedAt: new Date(), deletedById: leaderId, deleteReason: "Test" },
+      ],
+    });
+
+    await prisma.member.createMany({
+      data: [
+        { id: cancelledRmMemberId, fullName: "Cancelled Rm Member", normalizedFullName: "cancelled rm member", birthDate: now, churchJoinDate: now, userId: null },
+        { id: deletedRmMemberId, fullName: "Deleted Rm Member", normalizedFullName: "deleted rm member", birthDate: now, churchJoinDate: now, userId: null },
+      ],
+    });
+
+    await prisma.eventMember.createMany({
+      data: [
+        { eventId: cancelledEventId, memberId: cancelledRmMemberId },
+        { eventId: deletedEventId, memberId: deletedRmMemberId },
       ],
     });
 
@@ -170,6 +186,41 @@ describe("0H.2B — Event attendance (no ministry)", () => {
 
       expect(res.status).toBe(409);
       expect(res.body.code).toBe("EVENT_FINISHED");
+    });
+
+    it("removal blocked on cancelled event", async () => {
+      const res = await request(app)
+        .patch(`/events/${cancelledEventId}/removeMember`)
+        .set("Cookie", leaderToken)
+        .send({ memberId: cancelledRmMemberId });
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("EVENT_ALREADY_CANCELLED");
+
+      const em = await prisma.eventMember.findFirst({ where: { eventId: cancelledEventId, memberId: cancelledRmMemberId } });
+      expect(em).not.toBeNull();
+    });
+
+    it("removal blocked on deleted event", async () => {
+      const res = await request(app)
+        .patch(`/events/${deletedEventId}/removeMember`)
+        .set("Cookie", leaderToken)
+        .send({ memberId: deletedRmMemberId });
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("EVENT_DELETED");
+
+      const em = await prisma.eventMember.findFirst({ where: { eventId: deletedEventId, memberId: deletedRmMemberId } });
+      expect(em).not.toBeNull();
+    });
+
+    it("removal of non-existent member on active event returns 200", async () => {
+      const res = await request(app)
+        .patch(`/events/${eventId}/removeMember`)
+        .set("Cookie", leaderToken)
+        .send({ memberId: generateId() });
+
+      expect(res.status).toBe(200);
     });
   });
 });

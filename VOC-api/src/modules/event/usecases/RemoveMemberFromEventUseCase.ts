@@ -1,6 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { IEventRepository } from "../domain/repositories/IEventRepository";
 import { ValidationError } from "../../../shared/errors/ValidationError";
+import { NotFoundError } from "../../../shared/errors/NotFoundError";
+import { ConflictError } from "../../../shared/errors/ConflictError";
 import { ForbiddenError } from "../../../shared/errors/ForbiddenError";
 import { ISocketServer } from "../../../infra/socket/ISocketServer";
 import { IRealtimeNotificationPublisher } from "../../../infra/socket/RealtimeNotificationPublisher";
@@ -38,6 +40,28 @@ export class RemoveMemberFromEventUseCase {
 
     if (!eventId) {
       throw new ValidationError("MISSING_Event_ID");
+    }
+
+    if (!memberId) {
+      throw new ValidationError("MISSING_MEMBER_ID");
+    }
+
+    const event = await this.eventRepository.findById(eventId);
+
+    if (!event) {
+      throw new NotFoundError("EVENT_NOT_FOUND");
+    }
+
+    if (event.status === "CANCELLED") {
+      throw new ConflictError("EVENT_ALREADY_CANCELLED");
+    }
+
+    if (event.status === "FINISHED") {
+      throw new ConflictError("EVENT_FINISHED");
+    }
+
+    if (event.isDeleted) {
+      throw new ConflictError("EVENT_DELETED");
     }
 
     if (assignmentId) {
