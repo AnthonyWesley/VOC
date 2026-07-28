@@ -1,171 +1,230 @@
 import { Router } from "express";
+import type { Request, RequestHandler } from "express";
 import { JwtProvider } from "../../../identity/infra/providers/JwtProvider";
 import { makeAuthMiddleware } from "./middlewares/authMiddleware";
 import { requireLevel } from "./middlewares/requireLevel";
-import { whatsAppService } from "../../../../infra/whatsapp/whatsappContainer";
-import { prisma } from "../../../../package/prisma";
 import { LEVEL } from "../../../../shared/constants/levels";
 import { createLogger } from "../../../../shared/logger/logger";
-import { whatsappAdminLimiter } from "../../../../infra/whatsapp/whatsappLimiter";
+import { whatsappAdminFailureToHttpError } from "../../../../infra/whatsapp/whatsappAdminErrorMapper";
+import { isPrismaUniqueViolation } from "../../../../shared/utils/isPrismaUniqueViolation";
+import type { IWhatsAppAdminService } from "../../../../infra/whatsapp/IWhatsAppAdminService";
+import type { WhatsAppInstanceRepository } from "../../../../infra/whatsapp/WhatsAppInstanceRepository";
+import { createInstanceHttpSchema, instanceParamsSchema } from "../../../../infra/whatsapp/whatsappAdminSchemas";
+import { PrismaClient } from "@prisma/client";
 
-const router = Router();
-const jwtProvider = new JwtProvider();
-const auth = makeAuthMiddleware(jwtProvider);
 const logger = createLogger("whatsapp-routes");
 
-router.get(
-  "/instance",
-  auth,
-  requireLevel(LEVEL.PRESIDENT),
-  async (req, res) => {
-    const userId = req.auth!.userId;
+export type WhatsAppRoutesDependencies = {
+  adminService: IWhatsAppAdminService;
+  instanceRepository: WhatsAppInstanceRepository;
+  limiter: RequestHandler;
+  prisma: PrismaClient;
+};
 
-    const instance = await prisma.whatsAppInstance.findFirst({
-      where: { userId, isActive: true },
-    });
+export function createWhatsAppRoutes(deps: WhatsAppRoutesDependencies): Router {
+  const router = Router();
+  const jwtProvider = new JwtProvider();
+  const auth = makeAuthMiddleware(jwtProvider);
 
-    if (!instance) {
-      return res.json({ instance: null });
-    }
+  router.get(
+    "/instance",
+    auth,
+    requireLevel(LEVEL.PRESIDENT),
+    async (req, res, next) => {
+      try {
+        const userId = req.auth!.userId;
 
-    const stateResult = await whatsAppService.connectionState(instance.instanceName);
+        const instance = await deps.instanceRepository.findActiveByUserId(userId);
+        if (!instance) {
+          return res.status(404).json({ code: "WHATSAPP_INSTANCE_NOT_FOUND", message: "Nenhuma instância ativa encontrada" });
+        }
 
-    return res.json({
-      instance: {
-        id: instance.id,
-        instanceName: instance.instanceName,
-        number: instance.number,
-        isActive: instance.isActive,
-        state: stateResult.ok ? stateResult.state : "UNKNOWN",
-        createdAt: instance.createdAt,
-        updatedAt: instance.updatedAt,
-      },
-    });
-  },
-);
+        const stateResult = await deps.adminService.connectionState(instance.instanceName);
 
-router.post(
-  "/instance",
-  auth,
-  requireLevel(LEVEL.PRESIDENT),
-  whatsappAdminLimiter,
-  async (req, res) => {
-    const userId = req.auth!.userId;
-    const { instanceName } = req.body;
+        return res.json({
+          instance: {
+            id: instance.id,
+            instanceName: instance.instanceName,
+            number: instance.number,
+            isActive: instance.isActive,
+            state: stateResult.ok ? stateResult.value : "UNKNOWN",
+            createdAt: instance.createdAt,
+            updatedAt: instance.updatedAt,
+          },
+        });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
-    if (!instanceName) {
-      return res
-        .status(400)
-        .json({ message: "Nome da instância é obrigatório" });
-    }
+  router.post(
+    "/instance",
+    auth,
+    requireLevel(LEVEL.PRESIDENT),
+    deps.limiter,
+    async (req, res, next) => {
+      try {
+        const userId = req.auth!.userId;
+        const parsed = createInstanceHttpSchema.parse(req.body);
 
-    const existing = await prisma.whatsAppInstance.findUnique({
-      where: { instanceName },
-    });
-    if (existing) {
-      return res.status(409).json({ message: "Instância já existe" });
-    }
+        const existing = await deps.instanceRepository.findByInstanceName(parsed.instanceName);
+        if (existing) {
+          return res.status(409).json({ code: "WHATSAPP_INSTANCE_ALREADY_EXISTS", message: "Instância já existe" });
+        }
 
-    try {
-      const evolution = whatsAppService as any;
-      const result = await evolution.createInstance(instanceName);
+        const result = await deps.adminService.createInstance({ instanceName: parsed.instanceName });
 
-      await prisma.whatsAppInstance.create({
-        data: {
-          instanceName,
-          userId,
-          isActive: true,
-        },
-      });
+        if (!result.ok) {
+          throw whatsappAdminFailureToHttpError(result.code);
+        }
 
-      return res.json({
-        instanceName,
-        qrcode: result?.base64 ?? null,
-        pairingCode: result?.qrcode ?? null,
-      });
-    } catch (err: any) {
-      logger.warn({ operation: "whatsapp_create_instance", errorCode: "CREATE_FAILED" }, err.message ?? "Erro ao criar instância");
-      return res
-        .status(500)
-        .json({ message: err.message ?? "Erro ao criar instância" });
-    }
-  },
-);
+        try {
+          await deps.instanceRepository.create({
+            instanceName: parsed.instanceName,
+            userId,
+            isActive: true,
+          });
+        } catch (persistError: unknown) {
+          if (isPrismaUniqueViolation(persistError)) {
+            const winner = await deps.instanceRepository.findByInstanceName(parsed.instanceName);
+            if (winner) {
+              return res.status(409).json({ code: "WHATSAPP_INSTANCE_ALREADY_EXISTS", message: "Instância já existe" });
+            }
+          }
 
-router.get(
-  "/instance/:instanceName/qrcode",
-  auth,
-  requireLevel(LEVEL.PRESIDENT),
-  whatsappAdminLimiter,
-  async (req, res) => {
-    const instanceName = String(req.params.instanceName);
+          void deps.adminService.deleteInstance(parsed.instanceName)
+            .then((compResult) => {
+              if (!compResult.ok && compResult.code !== "INSTANCE_NOT_FOUND") {
+                logger.warn({ operation: "whatsapp_create_compensation", failureCode: compResult.code, providerStatus: compResult.providerStatus }, "Compensation delete failed");
+              }
+            })
+            .catch((compErr: unknown) => {
+              logger.error({ operation: "whatsapp_create_compensation", failureCode: "UNEXPECTED_COMPENSATION_ERROR", error: compErr }, "Compensation threw unexpectedly");
+            });
 
-    try {
-      const evolution = whatsAppService as any;
-      const result = await evolution.getQrCode(instanceName);
-      return res.json({
-        qrcode: result?.base64 ?? null,
-        pairingCode: result?.qrcode ?? null,
-      });
-    } catch {
-      return res.status(500).json({ message: "Erro ao obter QR Code" });
-    }
-  },
-);
+          throw persistError;
+        }
 
-router.get(
-  "/instance/:instanceName/state",
-  auth,
-  requireLevel(LEVEL.PRESIDENT),
-  async (req, res) => {
-    const instanceName = String(req.params.instanceName);
+        return res.status(201).json({
+          instanceName: parsed.instanceName,
+          qrcode: result.value.qrcode ?? null,
+          pairingCode: result.value.pairingCode ?? null,
+        });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
-    const stateResult = await whatsAppService.connectionState(instanceName);
+  router.get(
+    "/instance/:instanceName/qrcode",
+    auth,
+    requireLevel(LEVEL.PRESIDENT),
+    deps.limiter,
+    async (req, res, next) => {
+      try {
+        const parsed = instanceParamsSchema.parse(req.params);
+        const instanceName = parsed.instanceName;
 
-    if (stateResult.ok) {
-      return res.json({ state: stateResult.state });
-    }
+        const local = await deps.instanceRepository.findActiveByName(instanceName);
+        if (!local) {
+          return res.status(404).json({ code: "WHATSAPP_INSTANCE_NOT_FOUND", message: "Instância não encontrada" });
+        }
 
-    logger.warn({ operation: "whatsapp_connection_state", resultCode: stateResult.code }, "State check failed");
-    return res.json({ state: "UNKNOWN" });
-  },
-);
+        const result = await deps.adminService.getQrCode(instanceName);
 
-router.delete(
-  "/instance/:instanceName",
-  auth,
-  requireLevel(LEVEL.PRESIDENT),
-  whatsappAdminLimiter,
-  async (req, res) => {
-    const instanceName = String(req.params.instanceName);
+        if (!result.ok) {
+          throw whatsappAdminFailureToHttpError(result.code);
+        }
 
-    try {
-      const evolution = whatsAppService as any;
-      await evolution.deleteInstance(instanceName);
-    } catch {}
+        return res.json({
+          qrcode: result.value.qrcode,
+          pairingCode: result.value.pairingCode,
+        });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
-    await prisma.whatsAppInstance.deleteMany({ where: { instanceName } });
+  router.get(
+    "/instance/:instanceName/state",
+    auth,
+    requireLevel(LEVEL.PRESIDENT),
+    async (req, res, next) => {
+      try {
+        const parsed = instanceParamsSchema.parse(req.params);
 
-    return res.status(204).send();
-  },
-);
+        const local = await deps.instanceRepository.findActiveByName(parsed.instanceName);
+        if (!local) {
+          return res.status(404).json({ code: "WHATSAPP_INSTANCE_NOT_FOUND", message: "Instância não encontrada" });
+        }
 
-router.post(
-  "/instance/:instanceName/restart",
-  auth,
-  requireLevel(LEVEL.PRESIDENT),
-  whatsappAdminLimiter,
-  async (req, res) => {
-    const instanceName = String(req.params.instanceName);
+        const stateResult = await deps.adminService.connectionState(parsed.instanceName);
 
-    try {
-      const evolution = whatsAppService as any;
-      await evolution.restartInstance(instanceName);
-      return res.json({ message: "Instância reiniciada" });
-    } catch {
-      return res.status(500).json({ message: "Erro ao reiniciar instância" });
-    }
-  },
-);
+        if (stateResult.ok) {
+          return res.json({ state: stateResult.value });
+        }
 
-export { router as whatsappRoutes };
+        logger.warn({ operation: "whatsapp_connection_state", resultCode: stateResult.code }, "State check failed");
+        return res.json({ state: "UNKNOWN" });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  router.delete(
+    "/instance/:instanceName",
+    auth,
+    requireLevel(LEVEL.PRESIDENT),
+    deps.limiter,
+    async (req, res, next) => {
+      try {
+        const parsed = instanceParamsSchema.parse(req.params);
+
+        const result = await deps.adminService.deleteInstance(parsed.instanceName);
+
+        if (!result.ok && result.code !== "INSTANCE_NOT_FOUND") {
+          throw whatsappAdminFailureToHttpError(result.code);
+        }
+
+        await deps.instanceRepository.deleteByInstanceName(parsed.instanceName);
+
+        return res.status(204).send();
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  router.post(
+    "/instance/:instanceName/restart",
+    auth,
+    requireLevel(LEVEL.PRESIDENT),
+    deps.limiter,
+    async (req, res, next) => {
+      try {
+        const parsed = instanceParamsSchema.parse(req.params);
+
+        const local = await deps.instanceRepository.findActiveByName(parsed.instanceName);
+        if (!local) {
+          return res.status(404).json({ code: "WHATSAPP_INSTANCE_NOT_FOUND", message: "Instância não encontrada" });
+        }
+
+        const result = await deps.adminService.restartInstance(parsed.instanceName);
+
+        if (!result.ok) {
+          throw whatsappAdminFailureToHttpError(result.code);
+        }
+
+        return res.json({ message: "Instância reiniciada" });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  return router;
+}

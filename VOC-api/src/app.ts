@@ -17,9 +17,12 @@ import { ministryRoutes } from "./modules/communication/infra/http/ministryRoute
 import { categoryRoutes } from "./modules/communication/infra/http/categoryRoute";
 import { siteContentRoutes } from "./modules/communication/infra/http/siteContentRoutes";
 import { notificationRoutes } from "./modules/communication/infra/http/notificationRoutes";
-import { whatsappRoutes } from "./modules/communication/infra/http/whatsappRoutes";
+import { createWhatsAppRoutes } from "./modules/communication/infra/http/whatsappRoutes";
 import { postcodeRoutes } from "./modules/membership/infra/http/postcodeRoutes";
 import { adminRoutes } from "./modules/communication/infra/http/adminRoutes";
+import { whatsAppAdminService } from "./infra/whatsapp/whatsappContainer";
+import { createWhatsAppAdminLimiter } from "./infra/whatsapp/whatsappLimiter";
+import { PrismaWhatsAppInstanceRepository } from "./infra/whatsapp/PrismaWhatsAppInstanceRepository";
 import { swaggerSpec } from "./shared/swagger";
 import { requestIdMiddleware } from "./shared/logger/requestIdMiddleware";
 import { httpLoggerMiddleware } from "./shared/logger/httpLoggerMiddleware";
@@ -66,7 +69,14 @@ app.use("/posts", postRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/site-content", siteContentRoutes);
 app.use("/notifications", notificationRoutes);
-app.use("/whatsapp", whatsappRoutes);
+const whatsappAdminLimiter = createWhatsAppAdminLimiter();
+
+app.use("/whatsapp", createWhatsAppRoutes({
+  adminService: whatsAppAdminService,
+  instanceRepository: new PrismaWhatsAppInstanceRepository(prisma),
+  limiter: whatsappAdminLimiter,
+  prisma,
+}));
 app.use("/postcode", postcodeRoutes);
 app.use("/admin", adminRoutes);
 

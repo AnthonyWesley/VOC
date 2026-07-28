@@ -21,22 +21,6 @@ export type WhatsAppSendResult =
       httpStatus?: number;
     };
 
-export type WhatsAppConnectionState =
-  | "CONNECTED"
-  | "DISCONNECTED"
-  | "CONNECTING"
-  | "UNKNOWN";
-
-export type WhatsAppConnectionStateResult =
-  | {
-      ok: true;
-      state: WhatsAppConnectionState;
-    }
-  | {
-      ok: false;
-      code: Extract<WhatsAppFailureCode, "NOT_CONFIGURED" | "TIMEOUT" | "NETWORK_ERROR" | "AUTH_ERROR" | "PROVIDER_ERROR">;
-    };
-
 export function maskPhone(value: string): string {
   const digits = value.replace(/\D/g, "");
   if (digits.length <= 4) {

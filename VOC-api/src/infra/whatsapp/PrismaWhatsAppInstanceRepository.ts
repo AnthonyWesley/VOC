@@ -1,5 +1,5 @@
 import { PrismaClient, WhatsAppInstance } from "@prisma/client";
-import { WhatsAppInstanceRepository } from "./WhatsAppInstanceRepository";
+import { WhatsAppInstanceRepository, CreateWhatsAppInstanceData } from "./WhatsAppInstanceRepository";
 
 export class PrismaWhatsAppInstanceRepository implements WhatsAppInstanceRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -12,5 +12,25 @@ export class PrismaWhatsAppInstanceRepository implements WhatsAppInstanceReposit
     return this.prisma.whatsAppInstance.findFirst({
       where: { isActive: true },
     });
+  }
+
+  async findByInstanceName(instanceName: string): Promise<WhatsAppInstance | null> {
+    return this.prisma.whatsAppInstance.findUnique({
+      where: { instanceName },
+    });
+  }
+
+  async findActiveByUserId(userId: string): Promise<WhatsAppInstance | null> {
+    return this.prisma.whatsAppInstance.findFirst({
+      where: { userId, isActive: true },
+    });
+  }
+
+  async create(data: CreateWhatsAppInstanceData): Promise<WhatsAppInstance> {
+    return this.prisma.whatsAppInstance.create({ data });
+  }
+
+  async deleteByInstanceName(instanceName: string): Promise<void> {
+    await this.prisma.whatsAppInstance.deleteMany({ where: { instanceName } });
   }
 }

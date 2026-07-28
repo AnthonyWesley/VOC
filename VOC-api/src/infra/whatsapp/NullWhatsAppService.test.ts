@@ -8,9 +8,4 @@ describe("NullWhatsAppService", () => {
     const result = await service.sendMessage("5511999999999", "hello", "default");
     expect(result).toEqual({ ok: false, code: "NOT_CONFIGURED", retryable: false });
   });
-
-  it("returns NOT_CONFIGURED on connectionState", async () => {
-    const result = await service.connectionState("default");
-    expect(result).toEqual({ ok: false, code: "NOT_CONFIGURED" });
-  });
 });
