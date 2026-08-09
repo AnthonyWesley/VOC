@@ -6,7 +6,7 @@ import { JwtProvider } from "../../../identity/infra/providers/JwtProvider";
 import { AssignMemberToEventUseCase } from "../../usecases/AssignMemberToEventUseCase";
 import { PrismaEventRepository } from "../../domain/repositories/PrismaEventRepository";
 import { PrismaEventAssignmentRepository } from "../../infra/repositories/PrismaEventAssignmentRepository";
-import { PrismaAssignMemberTransaction } from "../../infra/transactions/PrismaAssignMemberTransaction";
+import { PrismaEventCriticalSection } from "../../infra/transactions/PrismaEventCriticalSection";
 import { INTEGRATION_DATABASE_URL, cleanIntegrationDatabase } from "../../../../__tests__/helpers";
 import { generateId } from "../../../../shared/utils/generateId";
 
@@ -118,7 +118,7 @@ describe("0H.2B — Assignment API concurrency & atomicity", () => {
       await prisma.notification.deleteMany({ where: { userId: memberUserId } });
       const eventRepo = new PrismaEventRepository(prisma);
       const assignmentLookup = new PrismaEventAssignmentRepository(prisma);
-      const assignmentTransaction = new PrismaAssignMemberTransaction(prisma);
+      const criticalSection = new PrismaEventCriticalSection(prisma);
 
       // createNotification.execute will be called inside the transaction and fail
       const failingNotifier = { execute: vi.fn().mockRejectedValue(new Error("FORCED_NOTIFICATION_FAILURE")) };
@@ -128,7 +128,7 @@ describe("0H.2B — Assignment API concurrency & atomicity", () => {
       const useCase = new AssignMemberToEventUseCase(
         eventRepo,
         assignmentLookup,
-        assignmentTransaction,
+        criticalSection,
         failingNotifier as any,
         prisma,
         fakeWhatsApp as any,
@@ -165,7 +165,7 @@ describe("0H.2B — Assignment API concurrency & atomicity", () => {
 
       const eventRepo = new PrismaEventRepository(prisma);
       const assignmentLookup = new PrismaEventAssignmentRepository(prisma);
-      const assignmentTransaction = new PrismaAssignMemberTransaction(prisma);
+      const criticalSection = new PrismaEventCriticalSection(prisma);
       const createNotification = new (await import("../../../../modules/notification/usecases/CreateNotificationUseCase")).CreateNotificationUseCase(
         new (await import("../../../../modules/notification/domain/repositories/PrismaNotificationRepository")).PrismaNotificationRepository(prisma),
       );
@@ -183,7 +183,7 @@ describe("0H.2B — Assignment API concurrency & atomicity", () => {
       const useCase = new AssignMemberToEventUseCase(
         eventRepo,
         assignmentLookup,
-        assignmentTransaction,
+        criticalSection,
         createNotification,
         prisma,
         fakeWhatsApp as any,
@@ -221,7 +221,7 @@ describe("0H.2B — Assignment API concurrency & atomicity", () => {
 
       const eventRepo = new PrismaEventRepository(prisma);
       const assignmentLookup = new PrismaEventAssignmentRepository(prisma);
-      const assignmentTransaction = new PrismaAssignMemberTransaction(prisma);
+      const criticalSection = new PrismaEventCriticalSection(prisma);
       const notifRepo = new (await import("../../../../modules/notification/domain/repositories/PrismaNotificationRepository")).PrismaNotificationRepository(prisma);
       const createNotification = new (await import("../../../../modules/notification/usecases/CreateNotificationUseCase")).CreateNotificationUseCase(notifRepo);
       const publisher = { publish: vi.fn() };
@@ -230,7 +230,7 @@ describe("0H.2B — Assignment API concurrency & atomicity", () => {
       const useCase = new AssignMemberToEventUseCase(
         eventRepo,
         assignmentLookup,
-        assignmentTransaction,
+        criticalSection,
         createNotification,
         prisma,
         whatsApp as any,
@@ -264,7 +264,7 @@ describe("0H.2B — Assignment API concurrency & atomicity", () => {
 
       const eventRepo = new PrismaEventRepository(prisma);
       const assignmentLookup = new PrismaEventAssignmentRepository(prisma);
-      const assignmentTransaction = new PrismaAssignMemberTransaction(prisma);
+      const criticalSection = new PrismaEventCriticalSection(prisma);
       const notifRepo = new (await import("../../../../modules/notification/domain/repositories/PrismaNotificationRepository")).PrismaNotificationRepository(prisma);
       const createNotification = new (await import("../../../../modules/notification/usecases/CreateNotificationUseCase")).CreateNotificationUseCase(notifRepo);
       const publisher = { publish: vi.fn() };
@@ -273,7 +273,7 @@ describe("0H.2B — Assignment API concurrency & atomicity", () => {
       const useCase = new AssignMemberToEventUseCase(
         eventRepo,
         assignmentLookup,
-        assignmentTransaction,
+        criticalSection,
         createNotification,
         prisma,
         whatsApp as any,

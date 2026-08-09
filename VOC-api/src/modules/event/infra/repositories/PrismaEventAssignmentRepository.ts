@@ -1,12 +1,12 @@
-import { PrismaClient } from "@prisma/client";
 import { generateId } from "../../../../shared/utils/generateId";
+import { PrismaDatabaseClient } from "../../../../shared/infra/PrismaDatabaseClient";
 import {
   IEventAssignmentRepository,
   CreateEventAssignmentInput,
   EventAssignmentRecord,
 } from "../../domain/repositories/IEventAssignmentRepository";
 
-type EventAssignmentDb = Pick<PrismaClient, "eventAssignment">;
+type EventAssignmentDb = Pick<PrismaDatabaseClient, "eventAssignment">;
 
 export class PrismaEventAssignmentRepository implements IEventAssignmentRepository {
   constructor(private readonly db: EventAssignmentDb) {}

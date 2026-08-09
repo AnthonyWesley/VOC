@@ -8,9 +8,28 @@ function mockWhatsApp() {
 
 function makeSut(publisher: IRealtimeNotificationPublisher, createNotificationResult?: { created: boolean; notification: any } | "UNDEFINED") {
   const repo = {
-    findById: vi.fn().mockResolvedValue({ id: "event-1", status: "SCHEDULED", isDeleted: false }),
+    findById: vi.fn(),
     removeAssignment: vi.fn(),
     removeMember: vi.fn(),
+  };
+  const criticalSection = {
+    execute: vi.fn().mockImplementation(async (_eventId: string, callback: any) => {
+      const mockEventRepo = {
+        findById: vi.fn().mockResolvedValue({ id: "event-1", status: "SCHEDULED", title: "Test", type: "SUNDAY_SERVICE", startsAt: new Date(), isDeleted: false }),
+        removeAssignment: vi.fn(),
+        removeMember: vi.fn(),
+      };
+      const mockNotificationRepo = {
+        create: vi.fn(),
+        findById: vi.fn(),
+        findByDedupKey: vi.fn(),
+        list: vi.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        countUnread: vi.fn(),
+      };
+      return callback({ eventRepository: mockEventRepo, assignmentRepository: {} as any, notificationRepository: mockNotificationRepo, categoryReader: {} as any, ministryReader: { findById: vi.fn().mockResolvedValue({ id: "ministry-1", name: "Music" }) as any } });
+    }),
   };
   const prisma = {
     eventAssignment: {
@@ -38,6 +57,7 @@ function makeSut(publisher: IRealtimeNotificationPublisher, createNotificationRe
 
   const useCase = new RemoveMemberFromEventUseCase(
     repo as any,
+    criticalSection as any,
     prisma,
     undefined,
     createNotification as any,
@@ -45,7 +65,7 @@ function makeSut(publisher: IRealtimeNotificationPublisher, createNotificationRe
     publisher,
   );
 
-  return { useCase, repo, createNotification, publisher };
+  return { useCase, repo, createNotification, publisher, criticalSection };
 }
 
 describe("RemoveMemberFromEventUseCase — publisher", () => {

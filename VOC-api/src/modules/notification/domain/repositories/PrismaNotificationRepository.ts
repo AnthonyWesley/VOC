@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
+import { PrismaDatabaseClient } from "../../../../shared/infra/PrismaDatabaseClient";
 import { Notification } from "../entities/Notification";
 import { INotificationRepository, ListNotificationsParams, PaginatedNotifications } from "./INotificationRepository";
 
@@ -17,7 +18,7 @@ function toDomain(raw: Prisma.NotificationGetPayload<{}>): Notification {
   });
 }
 
-type NotificationDb = Pick<PrismaClient, "notification">;
+type NotificationDb = Pick<PrismaDatabaseClient, "notification">;
 
 export class PrismaNotificationRepository implements INotificationRepository {
   constructor(private readonly db: NotificationDb) {}

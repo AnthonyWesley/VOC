@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { IEventRepository } from "../domain/repositories/IEventRepository";
+import { IEventCriticalSection } from "../domain/transactions/IEventCriticalSection";
 import { ValidationError } from "../../../shared/errors/ValidationError";
 import { NotFoundError } from "../../../shared/errors/NotFoundError";
 import { ConflictError } from "../../../shared/errors/ConflictError";
@@ -26,6 +27,7 @@ export type RemoveMemberFromEventOutput = {
 export class RemoveMemberFromEventUseCase {
   constructor(
     private readonly eventRepository: IEventRepository,
+    private readonly criticalSection: IEventCriticalSection,
     private readonly prisma: PrismaClient,
     private readonly socketServer?: ISocketServer,
     private readonly createNotification?: CreateNotificationUseCase,
@@ -46,127 +48,127 @@ export class RemoveMemberFromEventUseCase {
       throw new ValidationError("MISSING_MEMBER_ID");
     }
 
-    const event = await this.eventRepository.findById(eventId);
+    if (!assignmentId) {
+      return this.criticalSection.execute(eventId, async (ctx) => {
+        const event = await ctx.eventRepository.findById(eventId);
+        if (!event) throw new NotFoundError("EVENT_NOT_FOUND");
+        if (event.isDeleted) throw new ConflictError("EVENT_DELETED");
+        if (event.status === "CANCELLED") throw new ConflictError("EVENT_ALREADY_CANCELLED");
+        if (event.status === "FINISHED") throw new ConflictError("EVENT_FINISHED");
 
-    if (!event) {
-      throw new NotFoundError("EVENT_NOT_FOUND");
-    }
+        await ctx.eventRepository.removeMember(eventId, memberId);
 
-    if (event.status === "CANCELLED") {
-      throw new ConflictError("EVENT_ALREADY_CANCELLED");
-    }
-
-    if (event.status === "FINISHED") {
-      throw new ConflictError("EVENT_FINISHED");
-    }
-
-    if (event.isDeleted) {
-      throw new ConflictError("EVENT_DELETED");
-    }
-
-    if (assignmentId) {
-      const assignment = await this.prisma.eventAssignment.findUnique({
-        where: { id: assignmentId },
-        select: {
-          ministryId: true,
-        },
+        return { id: memberId };
       });
+    }
 
-      if (assignment?.ministryId) {
-        const [ministry, user] = await Promise.all([
-          this.prisma.ministry.findUnique({
-            where: { id: assignment.ministryId },
-            select: { leaderId: true },
-          }),
-          this.prisma.user.findUnique({
-            where: { id: userId },
-            include: { member: { select: { id: true } } },
-          }),
-        ]);
+    const assignment = await this.prisma.eventAssignment.findUnique({
+      where: { id: assignmentId },
+      select: { ministryId: true },
+    });
 
-        const isLeader =
-          user?.member?.id && user.member.id === ministry?.leaderId;
-        if (!isLeader && userLevel < 80) {
-          throw new ForbiddenError(
-            "NOT_MINISTRY_LEADER",
-            undefined,
-            "Você não é líder deste ministério",
-          );
-        }
+    if (!assignment) throw new NotFoundError("ASSIGNMENT_NOT_FOUND");
+
+    if (assignment.ministryId) {
+      const [ministry, user] = await Promise.all([
+        this.prisma.ministry.findUnique({
+          where: { id: assignment.ministryId },
+          select: { leaderId: true },
+        }),
+        this.prisma.user.findUnique({
+          where: { id: userId },
+          include: { member: { select: { id: true } } },
+        }),
+      ]);
+
+      const isLeader = user?.member?.id && user.member.id === ministry?.leaderId;
+      if (!isLeader && userLevel < 80) {
+        throw new ForbiddenError(
+          "NOT_MINISTRY_LEADER",
+          undefined,
+          "Você não é líder deste ministério",
+        );
+      }
+    }
+
+    const member = await this.prisma.member.findUnique({
+      where: { id: memberId },
+      select: { fullName: true, userId: true, phone: true },
+    });
+
+    const result = await this.criticalSection.execute(eventId, async (ctx) => {
+      const event = await ctx.eventRepository.findById(eventId);
+      if (!event) throw new NotFoundError("EVENT_NOT_FOUND");
+      if (event.isDeleted) throw new ConflictError("EVENT_DELETED");
+      if (event.status === "CANCELLED") throw new ConflictError("EVENT_ALREADY_CANCELLED");
+      if (event.status === "FINISHED") throw new ConflictError("EVENT_FINISHED");
+
+      await ctx.eventRepository.removeAssignment(assignmentId);
+
+      const ministry = assignment.ministryId
+        ? await ctx.ministryReader.findById(assignment.ministryId)
+        : null;
+
+      const eventLabel = event.title ?? event.type;
+      const dateStr = event.startsAt.toLocaleDateString("pt-BR");
+      const ministryName = ministry?.name ?? "ministério";
+
+      let notificationResult: Awaited<ReturnType<CreateNotificationUseCase["execute"]>> | null = null;
+
+      if (member?.userId && this.createNotification) {
+        notificationResult = await this.createNotification.execute(
+          {
+            userId: member.userId,
+            type: "MEMBRO_REMOVIDO",
+            title: "Removido da escala",
+            message: `Você foi removido de ${ministryName} no evento ${eventLabel} (${dateStr}).`,
+            payload: {
+              eventId,
+              memberId,
+              ministryName,
+              eventTitle: event.title ?? "",
+              eventDate: dateStr,
+            },
+            deduplicationKey: `v1:membro-removido:${assignmentId}`,
+          },
+          {
+            repository: ctx.notificationRepository,
+            recoverDeduplicationConflict: false,
+          },
+        );
       }
 
-      await this.eventRepository.removeAssignment(assignmentId);
-      const ministryId = assignment?.ministryId;
-      await this._notifyMemberRemoved(eventId, memberId, ministryId, assignmentId);
-    } else {
-      await this.eventRepository.removeMember(eventId, memberId);
+      return { memberPhone: member?.phone, memberFullName: member?.fullName, memberUserId: member?.userId, eventTitle: eventLabel, eventDate: dateStr, notificationResult };
+    });
+
+    if (result.memberUserId && this.createNotification && this.realtimePublisher && result.notificationResult?.created) {
+      this.realtimePublisher.publish(result.memberUserId, result.notificationResult.notification);
     }
 
-    return {
-      id: memberId,
-    };
+    if (result.memberPhone && this.whatsApp) {
+      this.dispatchWhatsAppBestEffort({
+        phone: result.memberPhone,
+        message: `Oi ${result.memberFullName}, tudo bem? Informamos que você não estará mais na escala para o evento *${result.eventTitle}* em ${result.eventDate}. Obrigado pela sua disponibilidade, e em breve surgirão novas oportunidades para servir.`,
+      });
+    }
+
+    return { id: memberId };
   }
 
-  private async _notifyMemberRemoved(
-    eventId: string,
-    memberId: string,
-    ministryId?: string,
-    assignmentId?: string,
-  ) {
-    const [event, member, ministry] = await Promise.all([
-      this.prisma.event.findUnique({
-        where: { id: eventId },
-        select: { title: true, type: true, startsAt: true },
-      }),
-      this.prisma.member.findUnique({
-        where: { id: memberId },
-        select: { fullName: true, userId: true, phone: true },
-      }),
-      ministryId
-        ? this.prisma.ministry.findUnique({
-            where: { id: ministryId },
-            select: { name: true },
-          })
-        : undefined,
-    ]);
-
-    if (!event || !member) return;
-
-    const eventLabel = event.title ?? event.type;
-    const dateStr = event.startsAt.toLocaleDateString("pt-BR");
-    const ministryName = ministry?.name ?? "ministério";
-
-    if (member.userId) {
-      const result = await this.createNotification?.execute({
-        userId: member.userId,
-        type: "MEMBRO_REMOVIDO",
-        title: `Removido da escala`,
-        message: `Você foi removido de ${ministryName} no evento ${eventLabel} (${dateStr}).`,
-        payload: {
-          eventId,
-          memberId,
-          ministryName,
-          eventTitle: event.title ?? "",
-          eventDate: dateStr,
-        },
-        deduplicationKey: assignmentId ? `v1:membro-removido:${assignmentId}` : undefined,
-      });
-      if (result?.created) {
-        this.realtimePublisher?.publish(member.userId, result.notification);
-      }
-    }
-
-    if (member.phone) {
-      const result = await this.whatsApp!
-        .sendMessage(
-          member.phone,
-          `Oi ${member.fullName}, tudo bem? Informamos que você não estará mais na escala do *${ministryName}* para o evento *${eventLabel}* em ${dateStr}. Obrigado pela sua disponibilidade, e em breve surgirão novas oportunidades para servir.`,
-          "default",
-        );
-
-      if (!result.ok && result.code !== "NOT_CONFIGURED") {
-        createLogger("remove-member-event").warn({ operation: "whatsapp_send", resultCode: result.code, phone: maskPhone(member.phone) }, "WhatsApp message was not accepted");
-      }
+  private dispatchWhatsAppBestEffort(input: { phone: string; message: string }): void {
+    try {
+      void this.whatsApp!
+        .sendMessage(input.phone, input.message, "default")
+        .then((result) => {
+          if (!result.ok && result.code !== "NOT_CONFIGURED") {
+            createLogger("remove-member-event").warn({ operation: "whatsapp_send", resultCode: result.code, phone: maskPhone(input.phone) }, "WhatsApp message was not accepted");
+          }
+        })
+        .catch((error: unknown) => {
+          createLogger("remove-member-event").error({ operation: "whatsapp_send", error }, "Unexpected WhatsApp error");
+        });
+    } catch (error: unknown) {
+      createLogger("remove-member-event").error({ operation: "whatsapp_dispatch", error }, "WhatsApp dispatch failed");
     }
   }
 }

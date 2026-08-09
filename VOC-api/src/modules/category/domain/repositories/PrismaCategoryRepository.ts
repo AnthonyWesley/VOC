@@ -1,10 +1,11 @@
 // src/modules/finance/infra/repositories/PrismaCategoryRepository.ts
-import { Prisma, PrismaClient, TransactionDirection } from "@prisma/client";
+import { Prisma, TransactionDirection } from "@prisma/client";
+import { PrismaDatabaseClient } from "../../../../shared/infra/PrismaDatabaseClient";
 import { ICategoryRepository } from "./ICategoryRepository";
 import { Category } from "../entities/Category";
 
 export class PrismaCategoryRepository implements ICategoryRepository {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaDatabaseClient) {}
 
   async findById(id: string): Promise<Category | null> {
     const record = await this.prisma.category.findUnique({

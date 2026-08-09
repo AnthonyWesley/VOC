@@ -1,6 +1,9 @@
 import { prisma } from "../../../../package/prisma";
 import { PrismaEventRepository } from "../../domain/repositories/PrismaEventRepository";
-import { PrismaCategoryRepository } from "../../../category/domain/repositories/PrismaCategoryRepository";
+import { PrismaEventReportRepository } from "../repositories/PrismaEventReportRepository";
+import { PrismaEventCriticalSection } from "../transactions/PrismaEventCriticalSection";
+import { PrismaEventWriteTransaction } from "../transactions/PrismaEventWriteTransaction";
+import { PrismaEventAdminRecipientReader } from "../services/PrismaEventAdminRecipientReader";
 import { AssignMemberToEventUseCase } from "../../usecases/AssignMemberToEventUseCase";
 import { CancelEventUseCase } from "../../usecases/CancelEventUseCase";
 import { CloseEventWithSummaryUseCase } from "../../usecases/CloseEventWithSummaryUseCase";
@@ -16,30 +19,32 @@ import { socketServer, realtimePublisher } from "../../../../infra/socket/socket
 import { createNotificationUseCase } from "../../../notification/infra/container";
 import { whatsAppService } from "../../../../infra/whatsapp/whatsappContainer";
 import { PrismaEventAssignmentRepository } from "../repositories/PrismaEventAssignmentRepository";
-import { PrismaAssignMemberTransaction } from "../transactions/PrismaAssignMemberTransaction";
 import { PrismaSiteTimezoneProvider } from "../../../../site-content/infra/PrismaSiteTimezoneProvider";
 import { SystemClock } from "../../../../shared/infra/SystemClock";
 
 const eventRepository = new PrismaEventRepository(prisma);
-const categoryRepository = new PrismaCategoryRepository(prisma);
+const eventReportRepository = new PrismaEventReportRepository(prisma);
 
 const timezoneProvider = new PrismaSiteTimezoneProvider(prisma);
 const clock = new SystemClock();
 
-const close = new CloseEventWithSummaryUseCase(eventRepository, categoryRepository, prisma, socketServer, createNotificationUseCase, realtimePublisher);
+const criticalSection = new PrismaEventCriticalSection(prisma);
+const writeTransaction = new PrismaEventWriteTransaction(prisma);
+const adminRecipientReader = new PrismaEventAdminRecipientReader(prisma);
+
+const close = new CloseEventWithSummaryUseCase(eventRepository, criticalSection, writeTransaction, adminRecipientReader, socketServer, createNotificationUseCase, realtimePublisher);
 const get = new GetEventDetailedUseCase(eventRepository);
 const list = new ListEventsUseCase(eventRepository);
-const monthlyReport = new GetMonthlyEventReportUseCase(eventRepository, timezoneProvider, clock);
-const softDelete = new DeleteEventUseCase(eventRepository, prisma);
+const monthlyReport = new GetMonthlyEventReportUseCase(eventReportRepository, timezoneProvider, clock);
+const softDelete = new DeleteEventUseCase(eventRepository, criticalSection);
 const update = new UpdateEventUseCase(eventRepository);
-const cancelEvent = new CancelEventUseCase(eventRepository);
+const cancelEvent = new CancelEventUseCase(eventRepository, criticalSection);
 const correctEvent = new CorrectEventUseCase(eventRepository, prisma);
 
 const assignmentLookup = new PrismaEventAssignmentRepository(prisma);
-const assignmentTransaction = new PrismaAssignMemberTransaction(prisma);
 
-const assignMember = new AssignMemberToEventUseCase(eventRepository, assignmentLookup, assignmentTransaction, createNotificationUseCase, prisma, whatsAppService, realtimePublisher);
-const removeMember = new RemoveMemberFromEventUseCase(eventRepository, prisma, socketServer, createNotificationUseCase, whatsAppService, realtimePublisher);
+const assignMember = new AssignMemberToEventUseCase(eventRepository, assignmentLookup, criticalSection, createNotificationUseCase, prisma, whatsAppService, realtimePublisher);
+const removeMember = new RemoveMemberFromEventUseCase(eventRepository, criticalSection, prisma, socketServer, createNotificationUseCase, whatsAppService, realtimePublisher);
 
 export const eventController = new EventController(
   close,

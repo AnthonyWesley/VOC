@@ -12,19 +12,23 @@ function makeSut(publisher: IRealtimeNotificationPublisher, createNotificationRe
     findAssignment: vi.fn(),
     assignMember: vi.fn(),
     findMemberAttendance: vi.fn(),
-    findById: vi.fn().mockResolvedValue({ id: "event-1", title: "Test", type: "SUNDAY_SERVICE", startsAt: new Date(), status: "SCHEDULED", isDeleted: false }),
+    findById: vi.fn(),
   };
   const assignmentLookup = {
     find: vi.fn(),
     create: vi.fn(),
   };
-  const transaction = {
-    execute: vi.fn().mockImplementation(async (callback: any) => {
-      const mockAssignments = {
+  const criticalSection = {
+    execute: vi.fn().mockImplementation(async (_eventId: string, callback: any) => {
+      const mockEventRepo = {
+        assignMember: vi.fn(),
+        findById: vi.fn().mockResolvedValue({ id: "event-1", title: "Test", type: "SUNDAY_SERVICE", startsAt: new Date(), status: "SCHEDULED", isDeleted: false }),
+      };
+      const mockAssignmentRepo = {
         create: vi.fn().mockResolvedValue({ id: "assignment-1", eventId: "event-1", memberId: "member-1", ministryId: "ministry-1", assignedAt: new Date() }),
         find: vi.fn(),
       };
-      const mockNotifications = {
+      const mockNotificationRepo = {
         create: vi.fn(),
         findById: vi.fn(),
         findByDedupKey: vi.fn(),
@@ -33,7 +37,7 @@ function makeSut(publisher: IRealtimeNotificationPublisher, createNotificationRe
         markAllAsRead: vi.fn(),
         countUnread: vi.fn(),
       };
-      return callback({ assignments: mockAssignments, notifications: mockNotifications });
+      return callback({ eventRepository: mockEventRepo, assignmentRepository: mockAssignmentRepo, notificationRepository: mockNotificationRepo, categoryReader: {} as any, ministryReader: {} as any });
     }),
   };
   const prisma = {
@@ -51,14 +55,14 @@ function makeSut(publisher: IRealtimeNotificationPublisher, createNotificationRe
   const useCase = new AssignMemberToEventUseCase(
     eventRepo as any,
     assignmentLookup as any,
-    transaction as any,
+    criticalSection as any,
     createNotification as any,
     prisma as any,
     mockWhatsApp() as any,
     publisher,
   );
 
-  return { useCase, eventRepo, createNotification, publisher };
+  return { useCase, eventRepo, createNotification, publisher, criticalSection };
 }
 
 describe("AssignMemberToEventUseCase — publisher", () => {

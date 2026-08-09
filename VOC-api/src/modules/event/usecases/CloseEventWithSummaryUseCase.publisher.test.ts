@@ -9,11 +9,14 @@ function makeSut(publisher: IRealtimeNotificationPublisher, createNotificationRe
     saveWithAttendanceAndFinancial: vi.fn(),
     markAsFinishedIfScheduled: vi.fn(),
   };
-  const categoryRepo = { findById: vi.fn() };
-  const prisma = {
-    user: {
-      findMany: vi.fn().mockResolvedValue([{ id: "admin-1" }, { id: "admin-2" }]),
-    },
+  const criticalSection = { execute: vi.fn() };
+  const writeTransaction = {
+    execute: vi.fn().mockImplementation(async (cb: any) => {
+      return cb({ eventRepository: repo, assignmentRepository: {}, notificationRepository: {}, categoryReader: {}, ministryReader: {} });
+    }),
+  };
+  const adminRecipientReader = {
+    findEventAdminUserIds: vi.fn().mockResolvedValue(["admin-1", "admin-2"]),
   };
   const createdResult = createNotificationResult === "UNDEFINED"
     ? undefined
@@ -24,14 +27,15 @@ function makeSut(publisher: IRealtimeNotificationPublisher, createNotificationRe
 
   const useCase = new CloseEventWithSummaryUseCase(
     repo as any,
-    categoryRepo as any,
-    prisma as any,
+    criticalSection as any,
+    writeTransaction as any,
+    adminRecipientReader as any,
     undefined,
     createNotification as any,
     publisher,
   );
 
-  return { useCase, repo, createNotification, publisher };
+  return { useCase, repo, createNotification, publisher, adminRecipientReader };
 }
 
 describe("CloseEventWithSummaryUseCase — publisher", () => {
@@ -40,7 +44,9 @@ describe("CloseEventWithSummaryUseCase — publisher", () => {
     const { useCase } = makeSut({ publish }, { created: true, notification: { id: "n-1", type: "EVENTO_CRIADO", title: "T", message: null, payload: null, payloadVersion: 1, readAt: null, createdAt: new Date().toISOString() } });
 
     await useCase.execute({
-      event: { type: "SUNDAY_SERVICE" as const, startsAt: new Date(), title: "New Event", createdAt: new Date(), updatedAt: new Date() },
+      mode: "CREATE_CLOSED",
+      event: { type: "SUNDAY_SERVICE" as const, startsAt: new Date(), title: "New Event" },
+      summary: {},
     });
 
     expect(publish).toHaveBeenCalledWith("admin-1", expect.any(Object));
@@ -52,7 +58,9 @@ describe("CloseEventWithSummaryUseCase — publisher", () => {
     const { useCase } = makeSut({ publish }, { created: false, notification: { id: "n-1", type: "EVENTO_CRIADO", title: "T", message: null, payload: null, payloadVersion: 1, readAt: null, createdAt: new Date().toISOString() } });
 
     await useCase.execute({
-      event: { type: "SUNDAY_SERVICE" as const, startsAt: new Date(), title: "New Event", createdAt: new Date(), updatedAt: new Date() },
+      mode: "CREATE_CLOSED",
+      event: { type: "SUNDAY_SERVICE" as const, startsAt: new Date(), title: "New Event" },
+      summary: {},
     });
 
     expect(publish).not.toHaveBeenCalled();
@@ -63,7 +71,9 @@ describe("CloseEventWithSummaryUseCase — publisher", () => {
     const { useCase } = makeSut({ publish }, "UNDEFINED");
 
     await useCase.execute({
-      event: { type: "SUNDAY_SERVICE" as const, startsAt: new Date(), title: "New Event", createdAt: new Date(), updatedAt: new Date() },
+      mode: "CREATE_CLOSED",
+      event: { type: "SUNDAY_SERVICE" as const, startsAt: new Date(), title: "New Event" },
+      summary: {},
     });
 
     expect(publish).not.toHaveBeenCalled();

@@ -1,8 +1,8 @@
-import { PrismaClient } from "@prisma/client";
 import { NotFoundError } from "../../../shared/errors/NotFoundError";
 import { ConflictError } from "../../../shared/errors/ConflictError";
 import { ForbiddenError } from "../../../shared/errors/ForbiddenError";
 import { IEventRepository } from "../domain/repositories/IEventRepository";
+import { IEventCriticalSection } from "../domain/transactions/IEventCriticalSection";
 
 export type DeleteEventInput = {
   eventId: string;
@@ -14,7 +14,7 @@ export type DeleteEventInput = {
 export class DeleteEventUseCase {
   constructor(
     private readonly repo: IEventRepository,
-    private readonly prisma: PrismaClient,
+    private readonly criticalSection: IEventCriticalSection,
   ) {}
 
   async execute(input: DeleteEventInput): Promise<void> {
@@ -25,19 +25,18 @@ export class DeleteEventUseCase {
       throw new ForbiddenError("NOT_EVENT_OWNER", undefined, "Você não tem permissão para excluir este evento");
     }
 
-    const [memberCount, assignmentCount, attendanceCount, financialCount] = await Promise.all([
-      this.prisma.eventMember.count({ where: { eventId: event.id } }),
-      this.prisma.eventAssignment.count({ where: { eventId: event.id } }),
-      this.prisma.eventAttendance.count({ where: { eventId: event.id } }),
-      this.prisma.financialRecord.count({ where: { eventId: event.id } }),
-    ]);
+    await this.criticalSection.execute(input.eventId, async (ctx) => {
+      const current = await ctx.eventRepository.findById(input.eventId);
+      if (!current) throw new NotFoundError("EVENT_NOT_FOUND");
+      if (current.isDeleted) throw new ConflictError("EVENT_ALREADY_DELETED");
 
-    if (memberCount > 0 || assignmentCount > 0 || attendanceCount > 0 || financialCount > 0) {
-      throw new ConflictError("EVENT_WITH_HISTORY_CANNOT_BE_DELETED");
-    }
+      const counts = await ctx.eventRepository.countEventRelations(input.eventId);
 
-    event.delete(input.deletedById, input.reason);
-    await this.repo.softDelete(event.id, input.deletedById, input.reason);
+      if (counts.memberCount > 0 || counts.assignmentCount > 0 || counts.attendanceCount > 0 || counts.financialCount > 0) {
+        throw new ConflictError("EVENT_WITH_HISTORY_CANNOT_BE_DELETED");
+      }
+
+      await ctx.eventRepository.softDelete(input.eventId, input.deletedById, input.reason);
+    });
   }
 }
-

@@ -58,20 +58,36 @@ export class EventController {
       })).optional(),
     });
     const parsed = schema.parse(request.body);
-    const input = {
-      event: {
-        ...parsed.event,
-        startsAt: new Date(parsed.event.startsAt),
-        endsAt: parsed.event.endsAt ? new Date(parsed.event.endsAt) : undefined,
-        attendanceMode: "SUMMARY" as const,
-        createdById: request.auth!.userId,
-      },
+    const summary = {
       attendance: parsed.attendance,
       financialRecords: parsed.financialRecords?.map((r) => ({
         ...r,
         date: new Date(r.date),
       })),
-    } as Parameters<typeof this.closeEventWithSummaryUseCase.execute>[0];
+    };
+
+    const input = parsed.event.id
+      ? {
+          mode: "CLOSE_EXISTING" as const,
+          eventId: parsed.event.id,
+          summary: { ...summary, endsAt: parsed.event.endsAt ? new Date(parsed.event.endsAt) : undefined },
+        }
+      : {
+          mode: "CREATE_CLOSED" as const,
+          event: {
+            title: parsed.event.title,
+            type: parsed.event.type,
+            startsAt: new Date(parsed.event.startsAt),
+            endsAt: parsed.event.endsAt ? new Date(parsed.event.endsAt) : undefined,
+            preacherId: parsed.event.preacherId,
+            theme: parsed.event.theme,
+            notes: parsed.event.notes,
+            needsScale: parsed.event.needsScale,
+            createdById: request.auth!.userId,
+          },
+          summary,
+        };
+
     const output = await this.closeEventWithSummaryUseCase.execute(input);
     return response.status(201).json(output);
   }

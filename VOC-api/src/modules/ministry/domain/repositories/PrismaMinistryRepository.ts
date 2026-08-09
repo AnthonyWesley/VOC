@@ -1,11 +1,11 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaDatabaseClient } from "../../../../shared/infra/PrismaDatabaseClient";
 import { Ministry } from "../entities/Ministry";
 import { IMinistryRepository, MemberMinistryRecord } from "./IMinistryRepository";
 import { DetailedMinistryDTO } from "../../usecases/GetMinistryDetailedUseCase";
 import { ListMinistriesOutput } from "../../usecases/ListMinistriesUseCase";
 
 export class PrismaMinistryRepository implements IMinistryRepository {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaDatabaseClient) {}
 
   async findDetailedMinistry(id: string): Promise<DetailedMinistryDTO | null> {
     const data = await this.prisma.ministry.findUnique({

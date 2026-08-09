@@ -1,13 +1,13 @@
 import { ISiteTimezoneProvider } from "../../../site-content/domain/ISiteTimezoneProvider";
 import { IClock } from "../../../shared/application/IClock";
-import { IEventRepository } from "../domain/repositories/IEventRepository";
+import { IEventReportRepository } from "../domain/repositories/IEventReportRepository";
 import { monthlyReportInputSchema } from "../domain/validation/eventReportSchemas";
 import { getYearMonthInTimeZone } from "../domain/utils/zonedDateTime";
 import { assertValidTimeZone } from "../domain/utils/timeZoneValidation";
 
 export class GetMonthlyEventReportUseCase {
   constructor(
-    private readonly eventRepository: IEventRepository,
+    private readonly eventReportRepository: IEventReportRepository,
     private readonly timezoneProvider: ISiteTimezoneProvider,
     private readonly clock: IClock,
   ) {}
@@ -24,7 +24,7 @@ export class GetMonthlyEventReportUseCase {
     const month = parsed.month ?? current!.month;
     const year = parsed.year ?? current!.year;
 
-    return this.eventRepository.getMonthlyReport({
+    return this.eventReportRepository.getMonthlyReport({
       month,
       year,
       type: parsed.type,

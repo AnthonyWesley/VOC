@@ -19,6 +19,13 @@ export type MarkAsCancelledInput = {
   cancelReason: string;
 };
 
+export type EventRelationCounts = {
+  memberCount: number;
+  assignmentCount: number;
+  attendanceCount: number;
+  financialCount: number;
+};
+
 export interface IEventRepository {
   findDetailedEvent(id: string): Promise<DetailedEventDTO | null>;
   findById(id: string): Promise<Event | null>;
@@ -33,40 +40,6 @@ export interface IEventRepository {
   }): Promise<{
     events: Event[];
     nextCursor: EventCursor | null;
-  }>;
-  getMonthlyReport(params: {
-    month: number;
-    year: number;
-    type?: EventType;
-    timezone: string;
-  }): Promise<{
-    month: number;
-    year: number;
-    events: Array<{
-      id: string;
-      title: string | null;
-      type: EventType;
-      startsAt: Date;
-      preacherName: string | null;
-      membersCount: number;
-      visitorsCount: number;
-      assignmentsCount: number;
-      attendanceMode: string;
-    }>;
-    summary: {
-      totalEvents: number;
-      totalMembers: number;
-      totalVisitors: number;
-      averageMembers: number | null;
-    };
-    individual: {
-      events: number;
-      membersPresent: number;
-      visitorsPresent: number;
-      averageMembersPresent: number | null;
-      averageVisitorsPresent: number | null;
-    };
-    cancelledEvents: number;
   }>;
   create(event: Event): Promise<void>;
   update(event: Event): Promise<void>;
@@ -86,4 +59,5 @@ export interface IEventRepository {
   assignMember(eventId: string, memberId: string): Promise<void>;
   removeMember(eventId: string, memberId: string): Promise<void>;
   removeAssignment(assignmentId: string): Promise<void>;
+  countEventRelations(eventId: string): Promise<EventRelationCounts>;
 }
