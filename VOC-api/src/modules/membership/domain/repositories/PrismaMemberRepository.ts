@@ -6,11 +6,12 @@ import {
   IMemberRepository,
 } from "./IMemberRepository";
 import { Member } from "../entities/Member";
-import { MemberStatus, Prisma, PrismaClient } from "@prisma/client";
+import { MemberStatus, Prisma } from "@prisma/client";
+import { PrismaDatabaseClient } from "../../../../shared/infra/PrismaDatabaseClient";
 import { DetailedMemberDTO } from "../../usecases/GetMemberDetailedUseCase";
 
 export class PrismaMemberRepository implements IMemberRepository {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private prisma: PrismaDatabaseClient) {}
 
   private rehydrate(data: {
     id: string;

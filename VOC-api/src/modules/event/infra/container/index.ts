@@ -39,7 +39,7 @@ const monthlyReport = new GetMonthlyEventReportUseCase(eventReportRepository, ti
 const softDelete = new DeleteEventUseCase(eventRepository, criticalSection);
 const update = new UpdateEventUseCase(eventRepository);
 const cancelEvent = new CancelEventUseCase(eventRepository, criticalSection);
-const correctEvent = new CorrectEventUseCase(eventRepository, prisma);
+const correctEvent = new CorrectEventUseCase(eventRepository, criticalSection);
 
 const assignmentLookup = new PrismaEventAssignmentRepository(prisma);
 

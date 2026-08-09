@@ -242,6 +242,21 @@ export class PrismaEventRepository implements IEventRepository {
     });
   }
 
+  async findAttendance(eventId: string): Promise<EventAttendance | null> {
+    const data = await this.db.eventAttendance.findUnique({
+      where: { eventId },
+    });
+    if (!data) return null;
+    return EventAttendance.rehydrate({
+      id: data.id,
+      eventId: data.eventId,
+      membersCount: data.membersCount,
+      visitorsCount: data.visitorsCount,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+    });
+  }
+
   private async buildMonthRangeTz(year: number, month: number) {
     const tz = await this.getTimezone();
     if (month < 1 || month > 12) throw new Error("Invalid month");

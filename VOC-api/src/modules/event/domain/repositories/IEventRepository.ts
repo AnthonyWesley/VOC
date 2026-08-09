@@ -29,6 +29,7 @@ export type EventRelationCounts = {
 export interface IEventRepository {
   findDetailedEvent(id: string): Promise<DetailedEventDTO | null>;
   findById(id: string): Promise<Event | null>;
+  findAttendance(eventId: string): Promise<EventAttendance | null>;
   findAssignment(eventId: string, memberId: string, ministryId: string): Promise<{ id: string } | null>;
   findMemberAttendance(eventId: string, memberId: string): Promise<{ eventId: string; memberId: string } | null>;
   findAll(params: {
