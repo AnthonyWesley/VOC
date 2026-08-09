@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import { CreateMemberUseCase } from "../../usecases/CreateMemberUseCase";
 import { UpdateMemberUseCase } from "../../usecases/UpdateMemberUseCase";
 import { DeleteMemberUseCase } from "../../usecases/DeleteMemberUseCase";
+import { RestoreMemberUseCase } from "../../usecases/RestoreMemberUseCase";
 import { ListMembersUseCase } from "../../usecases/ListMembersUseCase";
 import { GetMemberDetailedUseCase } from "../../usecases/GetMemberDetailedUseCase";
 import {
@@ -10,6 +11,7 @@ import {
   completeProfileHttpSchema,
   createMemberHttpSchema,
   updateMemberHttpSchema,
+  restoreMemberHttpSchema,
   listMembersQuerySchema,
 } from "../../domain/validation/memberSchemas";
 
@@ -20,6 +22,7 @@ export class MemberController {
     private readonly getDetailedMemberUseCase: GetMemberDetailedUseCase,
     private readonly listMembersUseCase: ListMembersUseCase,
     private readonly deleteMemberUseCase: DeleteMemberUseCase,
+    private readonly restoreMemberUseCase: RestoreMemberUseCase,
   ) {}
 
   async create(request: Request, response: Response): Promise<Response> {
@@ -120,5 +123,18 @@ export class MemberController {
     await this.deleteMemberUseCase.execute({ memberId });
 
     return response.status(204).send();
+  }
+
+  async restore(request: Request, response: Response): Promise<Response> {
+    const memberId = String(request.params.memberId);
+    const body = restoreMemberHttpSchema.parse(request.body);
+
+    const result = await this.restoreMemberUseCase.execute({
+      memberId,
+      restoredById: request.auth!.userId,
+      reason: body.reason,
+    });
+
+    return response.status(200).json(result);
   }
 }

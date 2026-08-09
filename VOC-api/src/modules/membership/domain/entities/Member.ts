@@ -192,6 +192,11 @@ export class Member {
     this.props.updatedAt = new Date();
   }
 
+  public restore(): void {
+    this.props.deletedAt = null;
+    this.props.updatedAt = new Date();
+  }
+
   public get isDeleted(): boolean {
     return this.props.deletedAt !== null;
   }

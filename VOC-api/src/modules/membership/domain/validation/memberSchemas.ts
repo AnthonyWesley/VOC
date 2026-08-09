@@ -78,6 +78,12 @@ export const updateMemberHttpSchema = z.object({
   status: z.enum(["ACTIVE", "INACTIVE", "VISITOR", "TRANSFERRED"]).optional(),
 });
 
+export const restoreMemberHttpSchema = z
+  .object({
+    reason: z.string().trim().min(3, "O motivo da restauração é obrigatório").max(500),
+  })
+  .strict();
+
 // ── List query (discriminated union) ─────────────────────
 
 const limitSchema = z.coerce.number().int().min(1).max(200).default(20);

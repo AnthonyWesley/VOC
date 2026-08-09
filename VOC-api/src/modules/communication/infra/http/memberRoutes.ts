@@ -37,4 +37,8 @@ router.patch("/:memberId/delete", auth, requireLevel(LEVEL.PRESIDENT), (req, res
   memberController.delete(req, res),
 );
 
+router.patch("/:memberId/restore", auth, requireLevel(LEVEL.PRESIDENT), (req, res) =>
+  memberController.restore(req, res),
+);
+
 export { router as memberRoutes };

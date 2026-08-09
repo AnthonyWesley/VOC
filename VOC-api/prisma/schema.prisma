@@ -41,6 +41,7 @@ model User {
   deletedEvents   Event[] @relation("EventDeletedBy")
   cancelledEvents Event[] @relation("EventCancelledBy")
   eventCorrections EventCorrection[] @relation("EventCorrectionCorrectedBy")
+  memberRestores  MemberRestoreLog[] @relation("MemberRestoreLogRestoredBy")
 
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -142,6 +143,7 @@ model Member {
   financialRecords   FinancialRecord[]
   assignments EventAssignment[]
   ledMinistries Ministry[] @relation("MinistryLeader")
+  restoreLogs        MemberRestoreLog[]
 
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -329,6 +331,19 @@ model EventCorrection {
   createdAt     DateTime @default(now())
 
   @@index([eventId, createdAt])
+}
+
+model MemberRestoreLog {
+  id            String   @id
+  memberId      String
+  member        Member   @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  restoredById  String
+  restoredBy    User     @relation("MemberRestoreLogRestoredBy", fields: [restoredById], references: [id], onDelete: Restrict)
+  reason        String
+  changes       Json
+  createdAt     DateTime @default(now())
+
+  @@index([memberId, createdAt])
 }
 
 enum EventType {

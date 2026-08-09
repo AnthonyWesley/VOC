@@ -1,4 +1,5 @@
 import { IMemberRepository } from "../domain/repositories/IMemberRepository";
+import { IMemberCriticalSection } from "../domain/transactions/IMemberCriticalSection";
 import { NotFoundError } from "../../../shared/errors/NotFoundError";
 
 export type DeleteMemberInput = {
@@ -6,20 +7,25 @@ export type DeleteMemberInput = {
 };
 
 export class DeleteMemberUseCase {
-  constructor(private readonly memberRepository: IMemberRepository) {}
+  constructor(
+    private readonly _repo: IMemberRepository,
+    private readonly criticalSection: IMemberCriticalSection,
+  ) {}
 
   async execute(input: DeleteMemberInput): Promise<void> {
-    const member = await this.memberRepository.findByIdIncludingDeleted(input.memberId);
+    await this.criticalSection.execute(input.memberId, async (ctx) => {
+      const member = await ctx.memberRepository.findByIdIncludingDeleted(input.memberId);
 
-    if (!member) {
-      throw new NotFoundError("Member not found");
-    }
+      if (!member) {
+        throw new NotFoundError("MEMBER_NOT_FOUND");
+      }
 
-    if (member.isDeleted) {
-      return;
-    }
+      if (member.isDeleted) {
+        return;
+      }
 
-    member.delete();
-    await this.memberRepository.save(member);
+      member.delete();
+      await ctx.memberRepository.save(member);
+    });
   }
 }
