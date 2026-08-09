@@ -17,6 +17,7 @@ export async function cleanIntegrationDatabase(prisma: PrismaClient): Promise<vo
     prisma.eventAttendance.deleteMany(),
     prisma.eventCorrection.deleteMany(),
     prisma.memberRestoreLog.deleteMany(),
+    prisma.ministryRestoreLog.deleteMany(),
     prisma.eventMember.deleteMany(),
     prisma.memberMinistry.deleteMany(),
     prisma.post.deleteMany(),

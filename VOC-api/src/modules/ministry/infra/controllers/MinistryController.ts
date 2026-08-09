@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import { CreateMinistryUseCase } from "../../usecases/CreateMinistryUseCase";
 import { UpdateMinistryUseCase } from "../../usecases/UpdateMinistryUseCase";
 import { DeleteMinistryUseCase } from "../../usecases/DeleteMinistryUseCase";
+import { RestoreMinistryUseCase } from "../../usecases/RestoreMinistryUseCase";
 import { AssignMemberToMinistryUseCase } from "../../usecases/AssignMemberToMinistryUseCase";
 import { RemoveMemberFromMinistryUseCase } from "../../usecases/RemoveMemberFromMinistryUseCase";
 import { ListMinistriesUseCase } from "../../usecases/ListMinistriesUseCase";
@@ -12,6 +13,7 @@ import {
   ministryMemberBodySchema,
   createMinistryHttpSchema,
   updateMinistryHttpSchema,
+  restoreMinistryHttpSchema,
 } from "../../domain/validation/ministrySchemas";
 
 export class MinistryController {
@@ -23,6 +25,7 @@ export class MinistryController {
     private readonly removeMemberFromMinistryUseCase: RemoveMemberFromMinistryUseCase,
     private readonly getDetailedMinistryUseCase: GetMinistryDetailedUseCase,
     private readonly listMinistriesUseCase: ListMinistriesUseCase,
+    private readonly restoreMinistryUseCase: RestoreMinistryUseCase,
   ) {}
 
   async create(request: Request, response: Response): Promise<Response> {
@@ -98,5 +101,18 @@ export class MinistryController {
     await this.deleteMinistryUseCase.execute({ ministryId });
 
     return response.status(204).send();
+  }
+
+  async restore(request: Request, response: Response): Promise<Response> {
+    const { ministryId } = ministryParamsSchema.parse(request.params);
+    const body = restoreMinistryHttpSchema.parse(request.body);
+
+    const result = await this.restoreMinistryUseCase.execute({
+      ministryId,
+      restoredById: request.auth!.userId,
+      reason: body.reason,
+    });
+
+    return response.status(200).json(result);
   }
 }

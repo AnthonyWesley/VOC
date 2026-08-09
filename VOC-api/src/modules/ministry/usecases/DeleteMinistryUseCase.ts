@@ -1,10 +1,6 @@
-import { PrismaClient } from "@prisma/client";
 import { IMinistryRepository } from "../domain/repositories/IMinistryRepository";
+import { IMinistryCriticalSection } from "../domain/transactions/IMinistryCriticalSection";
 import { NotFoundError } from "../../../shared/errors/NotFoundError";
-import { ConflictError } from "../../../shared/errors/ConflictError";
-import { createLogger } from "../../../shared/logger/logger";
-
-const logger = createLogger("delete-ministry");
 
 export type DeleteMinistryInput = {
   ministryId: string;
@@ -12,37 +8,24 @@ export type DeleteMinistryInput = {
 
 export class DeleteMinistryUseCase {
   constructor(
-    private readonly ministryRepository: IMinistryRepository,
-    private readonly prisma: PrismaClient,
+    private readonly _repo: IMinistryRepository,
+    private readonly criticalSection: IMinistryCriticalSection,
   ) {}
 
   async execute(input: DeleteMinistryInput): Promise<void> {
-    const ministry = await this.ministryRepository.findById(input.ministryId);
+    await this.criticalSection.execute(input.ministryId, async (ctx) => {
+      const ministry = await ctx.ministryRepository.findByIdIncludingDeleted(input.ministryId);
 
-    if (!ministry) {
-      throw new NotFoundError("Ministry not found");
-    }
-
-    const assignmentCount = await this.prisma.eventAssignment.count({
-      where: { ministryId: input.ministryId },
-    });
-
-    if (assignmentCount > 0) {
-      throw new ConflictError(
-        "MINISTRY_IN_USE",
-        { assignmentCount },
-        "Este ministério possui escalas em eventos e não pode ser removido",
-      );
-    }
-
-    try {
-      await this.ministryRepository.delete(input.ministryId);
-    } catch (error: unknown) {
-      if ((error as any)?.code === "P2003") {
-        logger.warn({ ministryId: input.ministryId, error }, "Referential integrity conflict on ministry delete");
-        throw new ConflictError("MINISTRY_IN_USE", undefined, "Este ministério possui vínculos e não pode ser removido");
+      if (!ministry) {
+        throw new NotFoundError("MINISTRY_NOT_FOUND");
       }
-      throw error;
-    }
+
+      if (ministry.isDeleted) {
+        return;
+      }
+
+      ministry.delete();
+      await ctx.ministryRepository.save(ministry);
+    });
   }
 }

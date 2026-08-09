@@ -39,8 +39,7 @@ export class UpdateMinistryUseCase {
       await this.ministryRepository.save(ministry);
     } catch (error: unknown) {
       if (isPrismaUniqueViolation(error)) {
-        logger.warn({ name, error }, "Duplicate ministry name on update");
-        throw new ConflictError("MINISTRY_NAME_CONFLICT", undefined, "Já existe um ministério com este nome");
+        await this.throwNameConflictAfterReRead(name, error);
       }
       throw error;
     }
@@ -48,5 +47,29 @@ export class UpdateMinistryUseCase {
     return {
       id: ministry.id,
     };
+  }
+
+  private async throwNameConflictAfterReRead(name: string | undefined, error: unknown): Promise<never> {
+    logger.warn({ name, error }, "Duplicate ministry name on update");
+
+    if (name === undefined) {
+      throw error;
+    }
+
+    const afterRollback = await this.ministryRepository.findByNameIncludingDeleted(name);
+
+    if (!afterRollback) {
+      throw error;
+    }
+
+    if (afterRollback.isDeleted) {
+      throw new ConflictError(
+        "MINISTRY_REACTIVATION_REQUIRED",
+        undefined,
+        "Este ministério foi removido e precisa de restauração explícita.",
+      );
+    }
+
+    throw new ConflictError("MINISTRY_NAME_CONFLICT", undefined, "Já existe um ministério com este nome");
   }
 }

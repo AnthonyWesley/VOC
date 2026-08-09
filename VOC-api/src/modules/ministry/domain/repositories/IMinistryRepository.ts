@@ -11,6 +11,8 @@ export type MemberMinistryRecord = {
 export interface IMinistryRepository {
   findDetailedMinistry(id: string): Promise<DetailedMinistryDTO | null>;
   findById(id: string): Promise<Ministry | null>;
+  findByIdIncludingDeleted(id: string): Promise<Ministry | null>;
+  findByNameIncludingDeleted(name: string): Promise<Ministry | null>;
   findAll(): Promise<Ministry[]>;
   findAllWithDetails(): Promise<ListMinistriesOutput[]>;
   save(user: Ministry): Promise<void>;

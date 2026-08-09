@@ -6,8 +6,10 @@ export type MinistryProps = {
   id: string;
   name: string;
   description?: string | null;
+  leaderId?: string | null;
   createdAt: Date;
   updatedAt: Date;
+  deletedAt?: Date | null;
 };
 
 export class Ministry {
@@ -17,6 +19,7 @@ export class Ministry {
   public static create(props: {
     name: string;
     description?: string;
+    leaderId?: string | null;
   }): Ministry {
     if (!props.name) {
       throw new Error("Name is required");
@@ -28,8 +31,10 @@ export class Ministry {
       id: generateId(),
       name: props.name,
       description: props.description,
+      leaderId: props.leaderId ?? null,
       createdAt: now,
       updatedAt: now,
+      deletedAt: null,
     });
   }
 
@@ -49,12 +54,34 @@ export class Ministry {
     return this.props.description ?? null;
   }
 
+  public get leaderId(): string | null {
+    return this.props.leaderId ?? null;
+  }
+
   public get createdAt(): Date {
     return this.props.createdAt;
   }
 
   public get updatedAt(): Date {
     return this.props.updatedAt;
+  }
+
+  public get deletedAt(): Date | null {
+    return this.props.deletedAt ?? null;
+  }
+
+  public get isDeleted(): boolean {
+    return this.props.deletedAt !== null;
+  }
+
+  public delete(): void {
+    this.props.deletedAt = new Date();
+    this.props.updatedAt = new Date();
+  }
+
+  public restore(): void {
+    this.props.deletedAt = null;
+    this.props.updatedAt = new Date();
   }
 
   public update(props: { name?: string; description?: string | null }): void {

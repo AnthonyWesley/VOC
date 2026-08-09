@@ -7,9 +7,29 @@ import { ListMinistriesOutput } from "../../usecases/ListMinistriesUseCase";
 export class PrismaMinistryRepository implements IMinistryRepository {
   constructor(private readonly prisma: PrismaDatabaseClient) {}
 
+  private rehydrate(data: {
+    id: string;
+    name: string;
+    description: string | null;
+    leaderId: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    deletedAt: Date | null;
+  }): Ministry {
+    return Ministry.rehydrate({
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      leaderId: data.leaderId ?? null,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      deletedAt: data.deletedAt,
+    });
+  }
+
   async findDetailedMinistry(id: string): Promise<DetailedMinistryDTO | null> {
     const data = await this.prisma.ministry.findUnique({
-      where: { id },
+      where: { id, deletedAt: null },
       include: {
         members: {
           include: {
@@ -42,38 +62,46 @@ export class PrismaMinistryRepository implements IMinistryRepository {
 
   async findById(id: string): Promise<Ministry | null> {
     const data = await this.prisma.ministry.findUnique({
+      where: { id, deletedAt: null },
+    });
+
+    if (!data) return null;
+
+    return this.rehydrate(data);
+  }
+
+  async findByIdIncludingDeleted(id: string): Promise<Ministry | null> {
+    const data = await this.prisma.ministry.findUnique({
       where: { id },
     });
 
     if (!data) return null;
 
-    return Ministry.rehydrate({
-      id: data.id,
-      name: data.name,
-      description: data.description,
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt,
+    return this.rehydrate(data);
+  }
+
+  async findByNameIncludingDeleted(name: string): Promise<Ministry | null> {
+    const data = await this.prisma.ministry.findUnique({
+      where: { name },
     });
+
+    if (!data) return null;
+
+    return this.rehydrate(data);
   }
 
   async findAll(): Promise<Ministry[]> {
     const data = await this.prisma.ministry.findMany({
+      where: { deletedAt: null },
       orderBy: { createdAt: "desc" },
     });
 
-    return data.map((data) =>
-      Ministry.rehydrate({
-        id: data.id,
-        name: data.name,
-        description: data.description,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-      }),
-    );
+    return data.map((data) => this.rehydrate(data));
   }
 
   async findAllWithDetails(): Promise<ListMinistriesOutput[]> {
     const ministries = await this.prisma.ministry.findMany({
+      where: { deletedAt: null },
       orderBy: { createdAt: "desc" },
       include: {
         _count: { select: { members: true } },
@@ -128,16 +156,21 @@ export class PrismaMinistryRepository implements IMinistryRepository {
       update: {
         name: ministry.name,
         description: ministry.description,
+        deletedAt: ministry.deletedAt,
       },
       create: {
         id: ministry.id,
         name: ministry.name,
         description: ministry.description,
+        deletedAt: ministry.deletedAt,
       },
     });
   }
 
   async delete(id: string): Promise<void> {
-    await this.prisma.ministry.delete({ where: { id } });
+    await this.prisma.ministry.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }

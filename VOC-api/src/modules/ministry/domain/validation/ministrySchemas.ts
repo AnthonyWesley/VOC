@@ -44,6 +44,12 @@ export const deleteMinistryInputSchema = z.object({
   ministryId: ulidSchema,
 }).strict();
 
+export const restoreMinistryHttpSchema = z
+  .object({
+    reason: z.string().trim().min(3, "O motivo da restauração é obrigatório").max(500),
+  })
+  .strict();
+
 export const getMinistryInputSchema = z.object({
   ministryId: ulidSchema,
 }).strict();

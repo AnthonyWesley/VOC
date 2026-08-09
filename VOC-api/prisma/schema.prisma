@@ -42,6 +42,7 @@ model User {
   cancelledEvents Event[] @relation("EventCancelledBy")
   eventCorrections EventCorrection[] @relation("EventCorrectionCorrectedBy")
   memberRestores  MemberRestoreLog[] @relation("MemberRestoreLogRestoredBy")
+  ministryRestores MinistryRestoreLog[] @relation("MinistryRestoreLogRestoredBy")
 
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -174,8 +175,10 @@ model Ministry {
   leader       Member?  @relation("MinistryLeader", fields: [leaderId], references: [id])
   members      MemberMinistry[]
   assignments  EventAssignment[]
+  restoreLogs  MinistryRestoreLog[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
 
   @@index([leaderId])
 }
@@ -344,6 +347,19 @@ model MemberRestoreLog {
   createdAt     DateTime @default(now())
 
   @@index([memberId, createdAt])
+}
+
+model MinistryRestoreLog {
+  id            String   @id
+  ministryId    String
+  ministry      Ministry @relation(fields: [ministryId], references: [id], onDelete: Restrict)
+  restoredById  String
+  restoredBy    User     @relation("MinistryRestoreLogRestoredBy", fields: [restoredById], references: [id], onDelete: Restrict)
+  reason        String
+  changes       Json
+  createdAt     DateTime @default(now())
+
+  @@index([ministryId, createdAt])
 }
 
 enum EventType {

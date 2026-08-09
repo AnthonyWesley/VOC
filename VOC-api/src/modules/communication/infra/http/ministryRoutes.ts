@@ -37,4 +37,8 @@ router.patch("/:ministryId/delete", auth, requireLevel(LEVEL.PRESIDENT), (req, r
   ministryController.delete(req, res),
 );
 
+router.patch("/:ministryId/restore", auth, requireLevel(LEVEL.PRESIDENT), (req, res) =>
+  ministryController.restore(req, res),
+);
+
 export { router as ministryRoutes };

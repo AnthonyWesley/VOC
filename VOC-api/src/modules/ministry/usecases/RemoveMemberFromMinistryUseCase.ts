@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { IMinistryRepository } from "../domain/repositories/IMinistryRepository";
 import { IMinistryMembershipTransaction } from "../domain/transactions/IMinistryMembershipTransaction";
 import { NotFoundError } from "../../../shared/errors/NotFoundError";
 import { ForbiddenError } from "../../../shared/errors/ForbiddenError";
@@ -26,6 +27,7 @@ export type RemoveMemberFromMinistryOutput = {
 export class RemoveMemberFromMinistryUseCase {
   constructor(
     private readonly transaction: IMinistryMembershipTransaction,
+    private readonly ministryRepository: IMinistryRepository,
     private readonly prisma: PrismaClient,
     private readonly createNotification: CreateNotificationUseCase,
     private readonly realtimePublisher: IRealtimeNotificationPublisher,
@@ -37,11 +39,8 @@ export class RemoveMemberFromMinistryUseCase {
   ): Promise<RemoveMemberFromMinistryOutput> {
     const { ministryId, memberId, userId, userLevel } = input;
 
-    const [ministry, member, user] = await Promise.all([
-      this.prisma.ministry.findUnique({
-        where: { id: ministryId },
-        select: { id: true, name: true, leaderId: true },
-      }),
+    const [ministryAggregate, member, user] = await Promise.all([
+      this.ministryRepository.findById(ministryId),
       this.prisma.member.findUnique({
         where: { id: memberId },
         select: { id: true, fullName: true, userId: true, phone: true },
@@ -51,6 +50,10 @@ export class RemoveMemberFromMinistryUseCase {
         include: { member: { select: { id: true } } },
       }),
     ]);
+
+    const ministry = ministryAggregate
+      ? { id: ministryAggregate.id, name: ministryAggregate.name, leaderId: ministryAggregate.leaderId }
+      : null;
 
     if (!ministry) throw new NotFoundError("MINISTRY_NOT_FOUND");
     if (!member) throw new NotFoundError("MEMBER_NOT_FOUND");

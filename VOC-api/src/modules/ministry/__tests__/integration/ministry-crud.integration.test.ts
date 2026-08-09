@@ -131,6 +131,25 @@ describe("0H.3B — Ministry CRUD", () => {
       expect(res.body.code).toBe("MINISTRY_NAME_CONFLICT");
     });
 
+    it("returns 409 MINISTRY_REACTIVATION_REQUIRED when name belongs to soft-deleted ministry", async () => {
+      const createRes = await request(app)
+        .post("/ministries")
+        .set("Cookie", presidentToken)
+        .send({ name: "Reativar" });
+
+      await request(app)
+        .patch(`/ministries/${createRes.body.id}/delete`)
+        .set("Cookie", presidentToken);
+
+      const res = await request(app)
+        .post("/ministries")
+        .set("Cookie", presidentToken)
+        .send({ name: "Reativar" });
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("MINISTRY_REACTIVATION_REQUIRED");
+    });
+
     it("rejects extra fields (strict)", async () => {
       const res = await request(app)
         .post("/ministries")
@@ -210,6 +229,25 @@ describe("0H.3B — Ministry CRUD", () => {
       expect(res.status).toBe(409);
     });
 
+    it("returns 409 MINISTRY_REACTIVATION_REQUIRED when updating to name of soft-deleted ministry", async () => {
+      const deletedRes = await request(app)
+        .post("/ministries")
+        .set("Cookie", presidentToken)
+        .send({ name: "Retired Name" });
+
+      await request(app)
+        .patch(`/ministries/${deletedRes.body.id}/delete`)
+        .set("Cookie", presidentToken);
+
+      const res = await request(app)
+        .patch(`/ministries/${ministryId}`)
+        .set("Cookie", presidentToken)
+        .send({ name: "Retired Name" });
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("MINISTRY_REACTIVATION_REQUIRED");
+    });
+
     it("returns 401 without auth", async () => {
       const res = await request(app)
         .patch(`/ministries/${ministryId}`)
@@ -261,7 +299,7 @@ describe("0H.3B — Ministry CRUD", () => {
   });
 
   describe("PATCH /ministries/:ministryId/delete", () => {
-    it("deletes empty ministry and returns 204", async () => {
+    it("soft-deletes empty ministry and returns 204", async () => {
       const createRes = await request(app)
         .post("/ministries")
         .set("Cookie", presidentToken)
@@ -274,7 +312,8 @@ describe("0H.3B — Ministry CRUD", () => {
       expect(res.status).toBe(204);
 
       const saved = await prisma.ministry.findUnique({ where: { id: createRes.body.id } });
-      expect(saved).toBeNull();
+      expect(saved).not.toBeNull();
+      expect(saved!.deletedAt).not.toBeNull();
     });
 
     it("returns 404 for non-existent ministry", async () => {
@@ -285,7 +324,7 @@ describe("0H.3B — Ministry CRUD", () => {
       expect(res.status).toBe(404);
     });
 
-    it("returns 409 for ministry with event assignments", async () => {
+    it("soft-deletes ministry with event assignments preserving links", async () => {
       const leaderMemberId = generateId();
       const memberId = generateId();
       const eventId = generateId();
@@ -309,13 +348,26 @@ describe("0H.3B — Ministry CRUD", () => {
       await prisma.eventAssignment.create({
         data: { id: generateId(), eventId, memberId, ministryId },
       });
+      await prisma.memberMinistry.create({
+        data: { ministryId, memberId, joinedAt: new Date() },
+      });
 
       const res = await request(app)
         .patch(`/ministries/${ministryId}/delete`)
         .set("Cookie", presidentToken);
 
-      expect(res.status).toBe(409);
-      expect(res.body.code).toBe("MINISTRY_IN_USE");
+      expect(res.status).toBe(204);
+
+      const saved = await prisma.ministry.findUnique({ where: { id: ministryId } });
+      expect(saved!.deletedAt).not.toBeNull();
+
+      const assignmentStillThere = await prisma.eventAssignment.findFirst({ where: { ministryId } });
+      expect(assignmentStillThere).not.toBeNull();
+
+      const membershipStillThere = await prisma.memberMinistry.findUnique({
+        where: { memberId_ministryId: { ministryId, memberId } },
+      });
+      expect(membershipStillThere).not.toBeNull();
     });
 
     it("returns 401 without auth", async () => {
@@ -331,6 +383,23 @@ describe("0H.3B — Ministry CRUD", () => {
         .set("Cookie", memberToken);
 
       expect(res.status).toBe(403);
+    });
+
+    it("returns 204 on second delete (idempotent via state)", async () => {
+      const createRes = await request(app)
+        .post("/ministries")
+        .set("Cookie", presidentToken)
+        .send({ name: "Double Delete Ministry" });
+
+      await request(app)
+        .patch(`/ministries/${createRes.body.id}/delete`)
+        .set("Cookie", presidentToken);
+
+      const res = await request(app)
+        .patch(`/ministries/${createRes.body.id}/delete`)
+        .set("Cookie", presidentToken);
+
+      expect(res.status).toBe(204);
     });
   });
 });
