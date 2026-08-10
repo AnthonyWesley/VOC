@@ -5,6 +5,7 @@ import { validateEnv } from "./shared/env";
 import { SocketServer } from "./infra/socket/SocketServer";
 import { setSocketServer } from "./infra/socket/socketContainer";
 import { setWhatsAppService, createRealWhatsAppService } from "./infra/whatsapp/whatsappContainer";
+import { setInstagramService, createRealInstagramService } from "./infra/instagram/instagramContainer";
 import { startInactiveMembersCron, stopInactiveMembersCron } from "./infra/cron/checkInactiveMembers";
 import { prisma } from "./package/prisma";
 import { createLogger } from "./shared/logger/logger";
@@ -24,6 +25,11 @@ httpServer.listen(env.port, () => {
   if (env.evolutionUrl) {
     setWhatsAppService(createRealWhatsAppService());
     logger.info("WhatsApp Evolution service activated");
+  }
+
+  if (env.instagramAccessToken && env.instagramUserId) {
+    setInstagramService(createRealInstagramService());
+    logger.info("Instagram media service activated");
   }
 
   if (env.cronEnabled) {

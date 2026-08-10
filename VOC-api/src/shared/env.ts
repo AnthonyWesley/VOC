@@ -10,6 +10,10 @@ export type ParsedEnv = {
   corsOrigins: string | undefined;
   evolutionUrl: string | null;
   evolutionApiKey: string | null;
+  instagramAccessToken: string | null;
+  instagramUserId: string | null;
+  instagramApiVersion: string;
+  instagramMediaLimit: number;
 };
 
 export function validateEnv(env: NodeJS.ProcessEnv = process.env): ParsedEnv {
@@ -60,6 +64,34 @@ export function validateEnv(env: NodeJS.ProcessEnv = process.env): ParsedEnv {
     errors.push("EVOLUTION_API_KEY is required when EVOLUTION_URL is configured");
   }
 
+  // ── Instagram Login (optional gallery) ──────────────────────────────
+  const instagramAccessToken = env.INSTAGRAM_ACCESS_TOKEN?.trim() || null;
+  const instagramUserId = env.INSTAGRAM_USER_ID?.trim() || null;
+
+  if (instagramAccessToken && !instagramUserId) {
+    errors.push("INSTAGRAM_USER_ID is required when INSTAGRAM_ACCESS_TOKEN is configured");
+  }
+
+  let instagramApiVersion = "v23.0";
+  if (env.INSTAGRAM_API_VERSION !== undefined && env.INSTAGRAM_API_VERSION.trim() !== "") {
+    const rawVersion = env.INSTAGRAM_API_VERSION.trim();
+    if (!/^v\d+\.\d+$/.test(rawVersion)) {
+      errors.push("INSTAGRAM_API_VERSION must follow the format vNN.N (e.g. v23.0)");
+    } else {
+      instagramApiVersion = rawVersion;
+    }
+  }
+
+  let instagramMediaLimit = 12;
+  if (env.INSTAGRAM_MEDIA_LIMIT !== undefined) {
+    const rawLimit = Number(env.INSTAGRAM_MEDIA_LIMIT);
+    if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > 100) {
+      errors.push("INSTAGRAM_MEDIA_LIMIT must be an integer between 1 and 100");
+    } else {
+      instagramMediaLimit = rawLimit;
+    }
+  }
+
   if (errors.length > 0) {
     for (const message of errors) {
       logger.error({ message }, "Environment validation failed");
@@ -75,5 +107,9 @@ export function validateEnv(env: NodeJS.ProcessEnv = process.env): ParsedEnv {
     corsOrigins: env.CORS_ORIGINS,
     evolutionUrl,
     evolutionApiKey,
+    instagramAccessToken,
+    instagramUserId,
+    instagramApiVersion,
+    instagramMediaLimit,
   };
 }

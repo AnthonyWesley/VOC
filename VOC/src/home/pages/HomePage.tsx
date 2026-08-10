@@ -4,6 +4,7 @@ import { Icon } from "@iconify/react";
 
 import PostArea from "../../post/components/PostArea";
 import HeroBanner from "../../components/HeroBanner";
+import InstagramGallery from "../components/InstagramGallery";
 import { usePublicSiteContent } from "../hooks/useSiteContent";
 
 function toEmbedUrl(url: string) {
@@ -269,6 +270,9 @@ export default function HomePage() {
           </h2>
         </div>
       </section>
+
+      {/* INSTAGRAM / FOTOS */}
+      <InstagramGallery />
 
       {/* MIDIA */}
       <section

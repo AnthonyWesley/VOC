@@ -20,6 +20,7 @@ import { notificationRoutes } from "./modules/communication/infra/http/notificat
 import { createWhatsAppRoutes } from "./modules/communication/infra/http/whatsappRoutes";
 import { postcodeRoutes } from "./modules/membership/infra/http/postcodeRoutes";
 import { adminRoutes } from "./modules/communication/infra/http/adminRoutes";
+import { instagramRoutes } from "./modules/communication/infra/http/instagramRoutes";
 import { whatsAppAdminService } from "./infra/whatsapp/whatsappContainer";
 import { createWhatsAppAdminLimiter } from "./infra/whatsapp/whatsappLimiter";
 import { PrismaWhatsAppInstanceRepository } from "./infra/whatsapp/PrismaWhatsAppInstanceRepository";
@@ -44,6 +45,7 @@ app.use(
         scriptSrc: ["'self'", "'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "https:"],
+        mediaSrc: ["'self'", "https:"],
         connectSrc: [
           "'self'",
           "http://localhost:5174",
@@ -68,6 +70,7 @@ app.use("/financial-records", financialRecordRoutes);
 app.use("/posts", postRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/site-content", siteContentRoutes);
+app.use("/instagram", instagramRoutes);
 app.use("/notifications", notificationRoutes);
 const whatsappAdminLimiter = createWhatsAppAdminLimiter();
 
