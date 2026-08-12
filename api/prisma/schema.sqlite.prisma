@@ -1,0 +1,556 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Schema local/dev (SQLite). Use os comandos:
+// - prisma generate --schema prisma/schema.sqlite.prisma
+// - prisma db push --schema prisma/schema.sqlite.prisma
+// - prisma studio --schema prisma/schema.sqlite.prisma
+// Para Postgres (docker-compose/migrations), use prisma/schema.prisma.
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+///////////////////////////////////////////////////////
+// AUTH CONTEXT (IDENTIDADE E AUTORIZAÇÃO)
+///////////////////////////////////////////////////////
+
+model User {
+  id            String     @id
+  email         String     @unique
+  passwordHash  String
+  isActive      Boolean    @default(true)
+  photoUrl      String?
+  photoPublicId String?
+  phoneVerifiedAt   DateTime?
+  emailVerifiedAt   DateTime?
+  isTemporaryPassword Boolean @default(false)
+  temporaryPasswordExpiresAt DateTime?
+  passwordChangedAt        DateTime?
+  roles         UserRole[]
+  member        Member?
+  posters       Post[] @relation("PostAuthor")
+  publishedPosts       Post[] @relation("PostPublishedBy")
+  archivedPosts        Post[] @relation("PostArchivedBy")
+  deletedPosts         Post[] @relation("PostDeletedBy")
+  recordedFinancialRecords  FinancialRecord[] @relation("FinancialRecordRecordedBy")
+  cancelledFinancialRecords FinancialRecord[] @relation("FinancialRecordCancelledBy")
+  reversedFinancialRecords  FinancialRecord[] @relation("FinancialRecordReversedByUser")
+  refreshTokens RefreshToken[]
+  notifications Notification[]
+
+  whatsappInstances WhatsAppInstance[]
+
+  createdEvents   Event[] @relation("EventCreatedBy")
+  deletedEvents   Event[] @relation("EventDeletedBy")
+  cancelledEvents Event[] @relation("EventCancelledBy")
+  eventCorrections EventCorrection[] @relation("EventCorrectionCorrectedBy")
+  memberRestores  MemberRestoreLog[] @relation("MemberRestoreLogRestoredBy")
+  ministryRestores MinistryRestoreLog[] @relation("MinistryRestoreLogRestoredBy")
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model RefreshToken {
+  id        String   @id
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum NotificationType {
+  MEMBER_AUSENTE
+  MEMBRO_VINCULADO
+  MEMBRO_REMOVIDO
+  EVENTO_CRIADO
+  MEMBRO_ESCALADO
+  MEMBRO_DESVINCULADO
+}
+
+model Notification {
+  id               String           @id
+  userId           String
+  type             NotificationType
+  title            String
+  message          String?
+  payload          Json?
+  payloadVersion   Int              @default(1)
+  deduplicationKey String?
+  readAt           DateTime?
+  createdAt        DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deduplicationKey])
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+model Role {
+  id          String     @id
+  name        String     @unique
+  level       Int
+  description String?
+  users       UserRole[]
+}
+
+model UserRole {
+  userId String
+  roleId String   // <-- aqui muda para String
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  assignedAt DateTime @default(now())
+
+  @@id([userId, roleId])
+}
+
+///////////////////////////////////////////////////////
+// DOMAIN CONTEXT – MEMBROS
+///////////////////////////////////////////////////////
+
+model Member {
+  id                 String   @id
+
+  fullName           String
+  normalizedFullName String
+
+  nickname           String?
+  normalizedNickname String?
+
+  birthDate          DateTime
+
+  phone              String?
+
+  postcode           String?
+  normalizedPostcode String?
+
+  address            String?
+
+  baptismDate        DateTime?
+  churchJoinDate     DateTime
+  status             MemberStatus @default(ACTIVE)
+
+  preachedEvents Event[] @relation("EventPreacher")
+
+  userId             String? @unique
+  user               User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  events             EventMember[]
+  ministries         MemberMinistry[]
+  financialRecords   FinancialRecord[]
+  assignments EventAssignment[]
+  ledMinistries Ministry[] @relation("MinistryLeader")
+  restoreLogs        MemberRestoreLog[]
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  deletedAt          DateTime?
+
+  @@unique([normalizedFullName, birthDate])
+  @@index([phone])
+  @@index([normalizedPostcode])
+  @@index([status])
+}
+
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+  VISITOR
+  TRANSFERRED
+}
+
+///////////////////////////////////////////////////////
+// MINISTÉRIOS
+///////////////////////////////////////////////////////
+
+model Ministry {
+  id           String   @id
+  name         String   @unique
+  description  String?
+  leaderId     String?
+  leader       Member?  @relation("MinistryLeader", fields: [leaderId], references: [id])
+  members      MemberMinistry[]
+  assignments  EventAssignment[]
+  restoreLogs  MinistryRestoreLog[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  @@index([leaderId])
+}
+
+model MemberMinistry {
+  memberId   String
+  ministryId String
+
+  member     Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  ministry   Ministry @relation(fields: [ministryId], references: [id], onDelete: Cascade)
+
+  joinedAt   DateTime @default(now())
+
+  @@id([memberId, ministryId])
+}
+
+model EventMember {
+  eventId   String
+  memberId  String
+  joinedAt  DateTime @default(now())
+  participantType EventParticipantType @default(MEMBER)
+
+  event     Event   @relation(fields: [eventId], references: [id])
+  member    Member  @relation(fields: [memberId], references: [id])
+
+  @@id([eventId, memberId])
+}
+
+model Category {
+  id    String @id
+  name  String @unique
+  type  TransactionDirection // optional, para diferenciar INCOME / OUTCOME
+  records FinancialRecord[]
+  createdAt          DateTime @default(now())
+
+}
+
+///////////////////////////////////////////////////////
+// CULTOS E EVENTOS
+///////////////////////////////////////////////////////
+
+model EventAttendance {
+  id           String   @id
+
+  eventId    String   @unique
+  event      Event  @relation(fields: [eventId], references: [id])
+
+  membersCount     Int
+  visitorsCount    Int
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model EventAssignment {
+  id         String @id
+  eventId    String
+  memberId   String
+  ministryId String
+
+  description String? // ex: "guitarra, vocal"
+
+  assignedAt DateTime @default(now())
+
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  ministry  Ministry @relation(fields: [ministryId], references: [id])
+
+  // evita duplicidade do mesmo membro no mesmo ministério para o mesmo evento
+  @@unique([eventId, memberId, ministryId])
+
+  // índices para acelerar queries
+  @@index([eventId])
+  @@index([memberId])
+  @@index([memberId, eventId])
+}
+
+enum AttendanceMode {
+  INDIVIDUAL
+  SUMMARY
+}
+
+enum EventStatus {
+  SCHEDULED
+  FINISHED
+  CANCELLED
+}
+
+enum EventParticipantType {
+  MEMBER
+  VISITOR
+}
+
+model Event {
+  id               String        @id
+
+  title            String?
+  type             EventType
+  status           EventStatus   @default(SCHEDULED)
+
+  startsAt         DateTime
+  endsAt           DateTime?
+
+  theme            String?
+  notes            String?
+
+  needsScale       Boolean       @default(false)
+
+  closeOperationId String?       @unique
+
+  preacherId       String?
+  preacher         Member?       @relation("EventPreacher", fields: [preacherId], references: [id])
+  attendanceMode   AttendanceMode
+
+  members          EventMember[]
+  assignments      EventAssignment[]
+  attendance       EventAttendance?
+
+  financialRecords FinancialRecord[]
+  corrections      EventCorrection[]
+
+  createdById      String?
+  createdBy        User?         @relation("EventCreatedBy", fields: [createdById], references: [id])
+
+  cancelledAt      DateTime?
+  cancelledById    String?
+  cancelledBy      User?         @relation("EventCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancelReason     String?
+
+  deletedAt        DateTime?
+  deletedById      String?
+  deletedBy        User?         @relation("EventDeletedBy", fields: [deletedById], references: [id])
+  deleteReason     String?
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([startsAt])
+  @@index([type])
+  @@index([status])
+  @@index([deletedAt, startsAt])
+  @@index([createdById])
+}
+
+model EventCorrection {
+  id            String   @id
+  eventId       String
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  correctedById String
+  correctedBy   User     @relation("EventCorrectionCorrectedBy", fields: [correctedById], references: [id], onDelete: Restrict)
+  reason        String
+  changes       Json
+  createdAt     DateTime @default(now())
+
+  @@index([eventId, createdAt])
+}
+
+model MemberRestoreLog {
+  id            String   @id
+  memberId      String
+  member        Member   @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  restoredById  String
+  restoredBy    User     @relation("MemberRestoreLogRestoredBy", fields: [restoredById], references: [id], onDelete: Restrict)
+  reason        String
+  changes       Json
+  createdAt     DateTime @default(now())
+
+  @@index([memberId, createdAt])
+}
+
+model MinistryRestoreLog {
+  id            String   @id
+  ministryId    String
+  ministry      Ministry @relation(fields: [ministryId], references: [id], onDelete: Restrict)
+  restoredById  String
+  restoredBy    User     @relation("MinistryRestoreLogRestoredBy", fields: [restoredById], references: [id], onDelete: Restrict)
+  reason        String
+  changes       Json
+  createdAt     DateTime @default(now())
+
+  @@index([ministryId, createdAt])
+}
+
+enum EventType {
+  HOUSE_SERVICE
+  SUNDAY_SERVICE
+  PRAYER_MEETING
+  BIBLE_STUDY
+  YOUTH_NIGHT
+  SPECIAL_EVENT
+}
+
+///////////////////////////////////////////////////////
+// FINANCEIRO
+///////////////////////////////////////////////////////
+
+enum TransactionStatus {
+  ACTIVE
+  CANCELLED
+  REVERSED
+}
+
+model FinancialRecord {
+  id              String   @id
+
+  // 🔒 Dados financeiros (imutáveis)
+  amount          Decimal
+  method          PaymentMethod
+  date            DateTime @default(now())
+  direction       TransactionDirection
+
+  memberId        String?
+  member          Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
+
+  eventId         String?
+  event           Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  recordedById    String
+  recordedBy      User     @relation("FinancialRecordRecordedBy", fields: [recordedById], references: [id], onDelete: Restrict)
+
+  // 🧠 Status de negócio (ESSENCIAL)
+  status          TransactionStatus @default(ACTIVE)
+
+  // 🔁 Reversão (auto-relacionamento 1:1)
+  reversalOfId    String?  @unique
+  reversalOf      FinancialRecord? @relation("FinancialRecordReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversedBy      FinancialRecord? @relation("FinancialRecordReversal")
+
+  // 🧾 Metadados (editáveis)
+  description     String?
+  categoryId      String
+  category        Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  // 🟡 Cancelamento (não é estorno!)
+  cancelledAt     DateTime?
+  cancelledById   String?
+  cancelledBy     User?    @relation("FinancialRecordCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancelReason    String?
+
+  // 🔄 Estorno (auditoria própria)
+  reversedAt      DateTime?
+  reversedById    String?
+  reversedByUser  User?    @relation("FinancialRecordReversedByUser", fields: [reversedById], references: [id], onDelete: SetNull)
+  reverseReason   String?
+
+  // 🕓 Auditoria
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([date])
+  @@index([status])
+  @@index([categoryId])
+}
+
+enum TransactionDirection {
+  INCOME
+  EXPENSE
+}
+
+enum PaymentMethod {
+  CASH
+  PIX
+  CREDIT_CARD
+  BANK_TRANSFER
+}
+
+///////////////////////////////////////////////////////
+// COMUNICAÇÃO
+///////////////////////////////////////////////////////
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PostVisibility {
+  PUBLIC
+  INTERNAL
+}
+
+model Post {
+  id          String          @id
+  title       String
+  content     String
+  imageUrl    String?
+
+  category    PostCategory
+  visibility  PostVisibility @default(PUBLIC)
+
+  status      PostStatus      @default(DRAFT)
+
+  firstPublishedAt DateTime?
+  publishedAt       DateTime?
+  archivedAt        DateTime?
+  deletedAt         DateTime?
+
+  authorId    String
+  author      User            @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  publishedById String?
+  publishedBy   User? @relation("PostPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+
+  archivedById  String?
+  archivedBy    User? @relation("PostArchivedBy", fields: [archivedById], references: [id], onDelete: SetNull)
+
+  deletedById   String?
+  deletedBy     User? @relation("PostDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([authorId, status, updatedAt, id])
+}
+
+enum PostCategory {
+  SERMON
+  ANNOUNCEMENT
+  EVENT_NEWS
+  DEVOTIONAL
+}
+
+model SiteContentSettings {
+  id                String   @id @default("main")
+  timezone          String   @default("America/Sao_Paulo")
+  churchName        String   @default("VOC Church")
+  heroTitle         String   @default("VOC Church")
+  heroSubtitle      String   @default("Uma comunidade de fe, amor e transformacao.")
+  heroDescription   String   @default("Acompanhe mensagens, fotos, videos e a vida da igreja em um so lugar.")
+  aboutTitle        String   @default("Sobre Nos")
+  aboutDescription  String   @default("Somos uma igreja comprometida com o evangelho, com o cuidado de pessoas e com o impacto positivo na comunidade.")
+  addressTitle      String   @default("Localizacao")
+  addressLine1      String   @default("Rua da Esperanca, 123")
+  addressLine2      String   @default("Centro - Cidade Exemplo")
+  contactPhone      String?
+  contactEmail      String?
+  footerText        String   @default("Todos os direitos reservados")
+  primaryCtaLabel   String   @default("Visitar plataforma")
+  primaryCtaUrl     String   @default("/auth/login")
+  secondaryCtaLabel String?
+  secondaryCtaUrl   String?
+  instagramUrl      String?
+  facebookUrl       String?
+  youtubeUrl        String?
+  bannersJson       String   @default("[]")
+  photosJson        String   @default("[]")
+  videosJson        String   @default("[]")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model WhatsAppInstance {
+  id          String   @id
+  instanceName String  @unique
+  number      String?
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model JobLease {
+  name        String   @id
+  lockedBy    String
+  lockedUntil DateTime
+  updatedAt   DateTime @updatedAt
+}
